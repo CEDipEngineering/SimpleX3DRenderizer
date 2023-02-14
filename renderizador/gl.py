@@ -6,14 +6,16 @@
 """
 Biblioteca Gráfica / Graphics Library.
 
-Desenvolvido por: <SEU NOME AQUI>
+Desenvolvido por: Carlos Dip
 Disciplina: Computação Gráfica
-Data: <DATA DE INÍCIO DA IMPLEMENTAÇÃO>
+Data: Feb 13, 2023
 """
 
 import time         # Para operações com tempo
 
 import gpu          # Simula os recursos de uma GPU
+
+from support import * # Implementacoes individuais
 
 class GL:
     """Classe que representa a biblioteca gráfica (Graphics Library)."""
@@ -43,11 +45,16 @@ class GL:
         # você pode assumir o desenho dos pontos com a cor emissiva (emissiveColor).
 
         # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
-        print("Polypoint2D : pontos = {0}".format(point)) # imprime no terminal pontos
-        print("Polypoint2D : colors = {0}".format(colors)) # imprime no terminal as cores
+        # print("Polypoint2D : pontos = {0}".format(point)) # imprime no terminal pontos
+        # print("Polypoint2D : colors = {0}".format(colors)) # imprime no terminal as cores
         # Exemplo:
-        gpu.GPU.set_pixel(3, 1, 255, 0, 0) # altera um pixel da imagem (u, v, r, g, b)
+        # gpu.GPU.set_pixel(3, 1, 255, 0, 0) # altera um pixel da imagem (u, v, r, g, b)
         # cuidado com as cores, o X3D especifica de (0,1) e o Framebuffer de (0,255)
+        respoints = reshape_points(point)
+        print(respoints)
+        for p in respoints:
+            gpu.GPU.set_pixel(*p.get_pixel(), *get_emissive_rgb(colors))
+
 
     @staticmethod
     def polyline2D(lineSegments, colors):
@@ -62,12 +69,22 @@ class GL:
         # O parâmetro colors é um dicionário com os tipos cores possíveis, para o Polyline2D
         # você pode assumir o desenho das linhas com a cor emissiva (emissiveColor).
 
-        print("Polyline2D : lineSegments = {0}".format(lineSegments)) # imprime no terminal
-        print("Polyline2D : colors = {0}".format(colors)) # imprime no terminal as cores
+        # print("Polyline2D : lineSegments = {0}".format(lineSegments)) # imprime no terminal
+        # print("Polyline2D : colors = {0}".format(colors)) # imprime no terminal as cores
         # Exemplo:
-        pos_x = GL.width//2
-        pos_y = GL.height//2
-        gpu.GPU.set_pixel(pos_x, pos_y, 255, 0, 0) # altera um pixel da imagem (u, v, r, g, b)
+        # pos_x = GL.width//2
+        # pos_y = GL.height//2
+        # gpu.GPU.set_pixel(pos_x, pos_y, 255, 0, 0) # altera um pixel da imagem (u, v, r, g, b)
+        respoints = reshape_points(lineSegments)
+        p0 = respoints.pop(0)
+        p1 = respoints.pop(0)
+        line = draw_line(p0, p1)
+        for p in line:
+            gpu.GPU.set_pixel(*p.get_pixel(), *get_emissive_rgb(colors))
+
+
+
+
 
     @staticmethod
     def triangleSet2D(vertices, colors):
@@ -82,7 +99,14 @@ class GL:
         print("TriangleSet2D : vertices = {0}".format(vertices)) # imprime no terminal
         print("TriangleSet2D : colors = {0}".format(colors)) # imprime no terminal as cores
         # Exemplo:
-        gpu.GPU.set_pixel(24, 8, 255, 255, 0) # altera um pixel da imagem (u, v, r, g, b)
+        # gpu.GPU.set_pixel(24, 8, 255, 255, 0) # altera um pixel da imagem (u, v, r, g, b)
+        respoints = reshape_points(vertices)
+        while len(respoints) != 0:
+            a, b, c = respoints.pop(0), respoints.pop(0), respoints.pop(0) # pop is O(n), can replace with collections.deque later for O(1)
+            tri = draw_triangle(a,b,c)
+            for p in tri:
+                gpu.GPU.set_pixel(*p.get_pixel(), *get_emissive_rgb(colors))
+
 
     @staticmethod
     def triangleSet(point, colors):
