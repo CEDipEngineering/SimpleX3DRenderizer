@@ -124,7 +124,7 @@ def draw_triangle(p0: CustomPoint, p1: CustomPoint, p2: CustomPoint) -> List[Cus
     for p in bounding_box:
         #compute whether inside triangle
         if inside(p, [p0,p1,p2]):
-            print("{}: is inside!".format(p))
+            # print("{}: is inside!".format(p))
             out.append(p)
     return out
 
