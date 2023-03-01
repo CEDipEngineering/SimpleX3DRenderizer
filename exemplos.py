@@ -20,9 +20,11 @@ TESTE = []
 TESTE.append(["pontos", "-i", DIR+"2D/pontos/pontos.x3d", "-w", "30", "-h", "20", "-p"])
 TESTE.append(["linhas", "-i", DIR+"2D/linhas/linhas.x3d", "-w", "30", "-h", "20", "-p"])
 TESTE.append(["octogono", "-i", DIR+"2D/linhas/octogono.x3d", "-w", "30", "-h", "20", "-p"])
+TESTE.append(["linhas_fora", "-i", DIR+"2D/linhas/linhas_fora.x3d", "-w", "30", "-h", "20", "-p"])
 TESTE.append(["var_lin", "-i", DIR+"2D/linhas/varias_linhas.x3d", "-w", "600", "-h", "400", "-p"])
 TESTE.append(["tri_2D", "-i", DIR+"2D/triangulos/triangulos.x3d", "-w", "30", "-h", "20", "-p"])
 TESTE.append(["helice", "-i", DIR+"2D/triangulos/helice.x3d", "-w", "30", "-h", "20", "-p"])
+TESTE.append(["tri_alta", "-i", DIR+"2D/triangulos/triangulos_alta.x3d", "-w", "600", "-h", "400", "-p"])
 
 # Exemplos 3D
 TESTE.append(["tri_3D", "-i", DIR+"3D/triangulos/triang3d.x3d", "-w", "300", "-h", "200", "-p"])
@@ -58,5 +60,8 @@ else:
     opcoes = [element for element in TESTE if element[0] == escolha][0]
 
 # Roda renderizador com os parâmetros necessário para o exemplo escolhido
-print("Abrindo arquivo: {0}".format(opcoes[2]))
-subprocess.call(["python3", "renderizador/renderizador.py"] + opcoes[1:])
+interpreter = sys.executable
+print('Abrindo arquivo: "{0}"'.format(opcoes[2]))
+print("> ", interpreter, "renderizador/renderizador.py", " ".join(opcoes[1:]), "\n")
+
+subprocess.call([interpreter, "renderizador/renderizador.py"] + opcoes[1:])
