@@ -162,11 +162,11 @@ class GL:
         print("orientation = {0} ".format(orientation), end='')
         print("fieldOfView = {0} ".format(fieldOfView))
         camera = look_at(CustomPoint3D(position[0], position[1], position[2]), CustomPoint3D(*orientation[:3]), orientation[-1])
-        # print(camera)
+        print(camera)
         project = make_projection_matrix(near=GL.near, far=GL.far, fovd=fieldOfView, w=GL.width, h=GL.height)
-        # print(project)
+        print(project)
         GL.projection = np.matmul(project, camera)
-        # print(GL.projection)
+        print(GL.projection)
 
 
     @staticmethod
@@ -190,11 +190,8 @@ class GL:
             print("rotation = {0} ".format(rotation), end='') # imprime no terminal
         print("")
 
-        translation = CustomPoint3D(0,0,0) if not translation else CustomPoint3D(*translation)
-        scale = CustomPoint3D(0,0,0) if not scale else CustomPoint3D(*scale) 
-        rotation = (CustomPoint3D(1,0,0), 0) if not rotation else (CustomPoint3D(*rotation[:3]), rotation[-1])
-
-        GL.transform_stack.push(make_transform(translation, scale, rotation))
+        GL.transform_stack.push(make_transform(translation, scale, (CustomPoint3D(*rotation[:3]), rotation[-1])))
+        print(GL.transform_stack.peek())
 
     @staticmethod
     def transform_out():

@@ -229,13 +229,15 @@ def look_at(camera_pos: CustomPoint3D, axis: np.array, angle: float):
 
     orientation = quaternion_rotation_matrix(CustomPoint3D(axis[0], axis[1], axis[2]), angle)
 
-    mat = np.matmul(orientation, tran)
+    mat = np.matmul(tran, orientation.T)
 
     return mat
 
 def quaternion_rotation_matrix(axis: CustomPoint3D, angle: float):
-    sin = np.sin(angle/360*np.pi)
-    cos = np.cos(angle/360*np.pi)
+    sin = np.sin(angle/2)
+    cos = np.cos(angle/2)
+    mod = np.sqrt(axis[0]**2 + axis[1]**2 + axis[2]**2) # normalize axis
+    axis = CustomPoint3D(axis.x/mod, axis.y/mod, axis.z/mod, 1)
     i,j,k,r =   (
                     axis.x * sin,
                     axis.y * sin,
@@ -250,8 +252,13 @@ def quaternion_rotation_matrix(axis: CustomPoint3D, angle: float):
             [0                  , 0                  , 0                  , 1]
         ]
     )
-def make_transform(translation: CustomPoint3D, scale: CustomPoint3D, rotation: Tuple[CustomPoint3D, float]):
+def make_transform(translation: CustomPoint3D  = None, scale: CustomPoint3D  = None, rotation: Tuple[CustomPoint3D, float] = None):
     
+    translation = CustomPoint3D(0,0,0) if not translation else CustomPoint3D(*translation)
+    scale = CustomPoint3D(1,1,1) if not scale else CustomPoint3D(*scale) 
+    rotation = (CustomPoint3D(1,0,0), 0) if not rotation else (rotation[0], rotation[1])
+
+
     # Translation matrix using homogeneous coordinates 
     T = np.array(
         [
@@ -273,6 +280,7 @@ def make_transform(translation: CustomPoint3D, scale: CustomPoint3D, rotation: T
     )
 
     # Quaternion rotation
+    print(rotation)
     R = quaternion_rotation_matrix(rotation[0], rotation[1])
 
     # Return combination
@@ -330,8 +338,14 @@ if __name__ == "__main__":
     # print(points)
     # print(draw_triangle(*points))
 
-    points = [0,0,0, 1,1,1, 2,2,2, 3,3,3, 4,4,4, 5,5,5]
-    print(reshape_points3D(points))
-    print(reshape_points3D(list(range(15))))
+    # points = [0,0,0, 1,1,1, 2,2,2, 3,3,3, 4,4,4, 5,5,5]
+    # print(reshape_points3D(points))
+    # print(reshape_points3D(list(range(15))))
+
+    # Teste quaternion
+    # print(quaternion_rotation_matrix(CustomPoint3D(1,0,0), -np.pi/2))
+
+    # Teste transform
+    # print(make_transform(rotation=[CustomPoint3D(1,0,0), -np.pi/2]))
 
     exit(0)
