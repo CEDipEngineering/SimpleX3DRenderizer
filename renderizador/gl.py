@@ -12,8 +12,9 @@ Data: Feb 13, 2023
 """
 
 import time         # Para operações com tempo
-
 import gpu          # Simula os recursos de uma GPU
+import math         # Funções matemáticas
+import numpy as np  # Biblioteca do Numpy
 
 from support import * # Implementacoes individuais
 from TransformStack import TransformStack # Pilha de transforms
@@ -120,8 +121,10 @@ class GL:
         # No TriangleSet os triângulos são informados individualmente, assim os três
         # primeiros pontos definem um triângulo, os três próximos pontos definem um novo
         # triângulo, e assim por diante.
-        # O parâmetro colors é um dicionário com os tipos cores possíveis, para o TriangleSet
-        # você pode assumir o desenho das linhas com a cor emissiva (emissiveColor).
+        # O parâmetro colors é um dicionário com os tipos cores possíveis, você pode assumir
+        # inicialmente, para o TriangleSet, o desenho das linhas com a cor emissiva
+        # (emissiveColor), conforme implementar novos materias você deverá suportar outros
+        # tipos de cores.
 
         # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
         print("TriangleSet : pontos = {0}".format(point)) # imprime no terminal pontos
