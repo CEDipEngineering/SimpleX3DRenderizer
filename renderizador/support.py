@@ -282,7 +282,9 @@ def make_transform(translation: CustomPoint3D  = None, scale: CustomPoint3D  = N
     # Quaternion rotation
     # print(rotation)
     R = quaternion_rotation_matrix(rotation[0], rotation[1])
-
+    print(T)
+    print(R)
+    print(S)
     # Return combination
     TR = np.matmul(T, R)
     return np.matmul(TR, S)
@@ -309,7 +311,7 @@ def make_projection_matrix(near: float, far: float, fovd: float, w: int, h: int)
     )
     # print("Persp\n",P)
     # print("Screen\n",E)
-    return np.matmul(P, E)
+    return np.matmul(E, P)
 
 def normalize_2d(projected: np.array) -> np.array:
     out = []

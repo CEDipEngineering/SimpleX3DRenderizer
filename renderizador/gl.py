@@ -142,7 +142,7 @@ class GL:
         # print(arr)
         # print("SHAPES:  ", arr.shape, GL.transform_stack.peek().shape)
         t = np.matmul(GL.transform_stack.peek(), arr)
-        p = np.matmul(GL.projection, arr)
+        p = np.matmul(GL.projection, t)
         norm_2d = normalize_2d(p)
         print("NORM2D: ", norm_2d)
         GL.triangleSet2D(norm_2d, colors) 
@@ -166,7 +166,7 @@ class GL:
         project = make_projection_matrix(near=GL.near, far=GL.far, fovd=fieldOfView, w=GL.width, h=GL.height)
         # print(project)
         GL.projection = np.matmul(project, camera)
-        print(GL.projection)
+        # print(GL.projection)
 
 
     @staticmethod
@@ -191,7 +191,7 @@ class GL:
         print("")
 
         GL.transform_stack.push(make_transform(translation, scale, (CustomPoint3D(*rotation[:3]), rotation[-1])))
-        print(GL.transform_stack.peek())
+        # print(GL.transform_stack.peek()) 
 
     @staticmethod
     def transform_out():
