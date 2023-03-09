@@ -228,8 +228,8 @@ def look_at(camera_pos: CustomPoint3D, axis: np.array, angle: float):
     )
 
     orientation = quaternion_rotation_matrix(CustomPoint3D(axis[0], axis[1], axis[2]), angle)
-
-    mat = np.matmul(tran, orientation.T)
+    # print(orientation)
+    mat = np.matmul(orientation.T, tran)
 
     return mat
 
@@ -280,7 +280,7 @@ def make_transform(translation: CustomPoint3D  = None, scale: CustomPoint3D  = N
     )
 
     # Quaternion rotation
-    print(rotation)
+    # print(rotation)
     R = quaternion_rotation_matrix(rotation[0], rotation[1])
 
     # Return combination
@@ -307,6 +307,8 @@ def make_projection_matrix(near: float, far: float, fovd: float, w: int, h: int)
             [0  , 0   , 0, 1  ]
         ]
     )
+    # print("Persp\n",P)
+    # print("Screen\n",E)
     return np.matmul(P, E)
 
 def normalize_2d(projected: np.array) -> np.array:

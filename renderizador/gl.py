@@ -162,9 +162,9 @@ class GL:
         print("orientation = {0} ".format(orientation), end='')
         print("fieldOfView = {0} ".format(fieldOfView))
         camera = look_at(CustomPoint3D(position[0], position[1], position[2]), CustomPoint3D(*orientation[:3]), orientation[-1])
-        print(camera)
+        # print("lookat:\n",camera)
         project = make_projection_matrix(near=GL.near, far=GL.far, fovd=fieldOfView, w=GL.width, h=GL.height)
-        print(project)
+        # print(project)
         GL.projection = np.matmul(project, camera)
         print(GL.projection)
 
