@@ -16,6 +16,7 @@ import time         # Para operações com tempo
 import gpu          # Simula os recursos de uma GPU
 
 from support import * # Implementacoes individuais
+from TransformStack import TransformStack # Pilha de transforms
 
 class GL:
     """Classe que representa a biblioteca gráfica (Graphics Library)."""
@@ -24,6 +25,8 @@ class GL:
     height = 600  # altura da tela
     near = 0.01   # plano de corte próximo
     far = 1000    # plano de corte distante
+    transform_stack = TransformStack()
+    projection = transform_stack.peek()
 
     @staticmethod
     def setup(width, height, near=0.01, far=1000):
@@ -48,12 +51,13 @@ class GL:
         # print("Polypoint2D : pontos = {0}".format(point)) # imprime no terminal pontos
         # print("Polypoint2D : colors = {0}".format(colors)) # imprime no terminal as cores
         # Exemplo:
-        # gpu.GPU.set_pixel(3, 1, 255, 0, 0) # altera um pixel da imagem (u, v, r, g, b)
+        # gpu.GPU.draw_pixel(3, 1, 255, 0, 0) # altera um pixel da imagem (u, v, r, g, b)
         # cuidado com as cores, o X3D especifica de (0,1) e o Framebuffer de (0,255)
-        respoints = reshape_points(point)
+        respoints = reshape_points2D(point)
         print(respoints)
         for p in respoints:
-            gpu.GPU.set_pixel(*p.get_pixel(), *get_emissive_rgb(colors))
+            gpu.GPU.draw_pixel(p.get_pixel(), gpu.GPU.RGB8, get_emissive_rgb(colors))
+
 
 
     @staticmethod
@@ -62,7 +66,7 @@ class GL:
         # Nessa função você receberá os pontos de uma linha no parâmetro lineSegments, esses
         # pontos são uma lista de pontos x, y sempre na ordem. Assim point[0] é o valor da
         # coordenada x do primeiro ponto, point[1] o valor y do primeiro ponto. Já point[2] é
-        # a coordenada x do segundo ponto e assim por diante. Assuma a quantidade de pontos
+        # a coordenada x do segundo poviewpointnto e assim por diante. Assuma a quantidade de pontos
         # pelo tamanho da lista. A quantidade mínima de pontos são 2 (4 valores), porém a
         # função pode receber mais pontos para desenhar vários segmentos. Assuma que sempre
         # vira uma quantidade par de valores.
@@ -74,17 +78,13 @@ class GL:
         # Exemplo:
         # pos_x = GL.width//2
         # pos_y = GL.height//2
-        # gpu.GPU.set_pixel(pos_x, pos_y, 255, 0, 0) # altera um pixel da imagem (u, v, r, g, b)
-        respoints = reshape_points(lineSegments)
+        # gpu.GPU.draw_pixel(pos_x, pos_y, 255, 0, 0) # altera um pixel da imagem (u, v, r, g, b)
+        respoints = reshape_points2D(lineSegments)
         p0 = respoints.pop(0)
         p1 = respoints.pop(0)
         line = draw_line(p0, p1)
         for p in line:
-            gpu.GPU.set_pixel(*p.get_pixel(), *get_emissive_rgb(colors))
-
-
-
-
+            gpu.GPU.draw_pixel(p.get_pixel(), gpu.GPU.RGB8, get_emissive_rgb(colors))
 
     @staticmethod
     def triangleSet2D(vertices, colors):
@@ -100,13 +100,13 @@ class GL:
         print("TriangleSet2D : colors = {0}".format(colors)) # imprime no terminal as cores
 
         # Exemplo:
-        # gpu.GPU.set_pixel(24, 8, 255, 255, 0) # altera um pixel da imagem (u, v, r, g, b)
-        respoints = reshape_points(vertices)
+        # gpu.GPU.draw_pixel(24, 8, 255, 255, 0) # altera um pixel da imagem (u, v, r, g, b)
+        respoints = reshape_points2D(vertices)
         while len(respoints) != 0:
             a, b, c = respoints.pop(0), respoints.pop(0), respoints.pop(0) # pop is O(n), can replace with collections.deque later for O(1)
             tri = draw_triangle(a,b,c)
             for p in tri:
-                gpu.GPU.set_pixel(*p.get_pixel(), *get_emissive_rgb(colors))
+                gpu.GPU.draw_pixel(p.get_pixel(), gpu.GPU.RGB8, get_emissive_rgb(colors))
 
 
     @staticmethod
@@ -128,7 +128,23 @@ class GL:
         print("TriangleSet : colors = {0}".format(colors)) # imprime no terminal as cores
 
         # Exemplo de desenho de um pixel branco na coordenada 10, 10
-        gpu.GPU.draw_pixel([10, 10], gpu.GPU.RGB8, [255, 255, 255])  # altera pixel
+        # gpu.GPU.draw_pixel([10, 10], gpu.GPU.RGB8, [255, 255, 255])  # altera pixel
+
+        # Transform, Project, 2D
+        arr = reshape_points3D(point)
+        homo = [1] * len(arr[0])
+        arr = list(arr)
+        arr.append(homo)
+        arr = np.array(arr)
+        # print(arr)
+        # print("SHAPES:  ", arr.shape, GL.transform_stack.peek().shape)
+        t = np.matmul(GL.transform_stack.peek(), arr)
+        p = np.matmul(GL.projection, arr)
+        norm_2d = normalize_2d(p)
+        print("NORM2D: ", norm_2d)
+        GL.triangleSet2D(norm_2d, colors) 
+
+
 
     @staticmethod
     def viewpoint(position, orientation, fieldOfView):
@@ -142,6 +158,13 @@ class GL:
         print("position = {0} ".format(position), end='')
         print("orientation = {0} ".format(orientation), end='')
         print("fieldOfView = {0} ".format(fieldOfView))
+        camera = look_at(CustomPoint3D(position[0], position[1], position[2]), CustomPoint3D(*orientation[:3]), orientation[-1])
+        # print(camera)
+        project = make_projection_matrix(near=GL.near, far=GL.far, fovd=fieldOfView, w=GL.width, h=GL.height)
+        # print(project)
+        GL.projection = np.matmul(project, camera)
+        # print(GL.projection)
+
 
     @staticmethod
     def transform_in(translation, scale, rotation):
@@ -164,6 +187,12 @@ class GL:
             print("rotation = {0} ".format(rotation), end='') # imprime no terminal
         print("")
 
+        translation = CustomPoint3D(0,0,0) if not translation else CustomPoint3D(*translation)
+        scale = CustomPoint3D(0,0,0) if not scale else CustomPoint3D(*scale) 
+        rotation = (CustomPoint3D(1,0,0), 0) if not rotation else (CustomPoint3D(*rotation[:3]), rotation[-1])
+
+        GL.transform_stack.push(make_transform(translation, scale, rotation))
+
     @staticmethod
     def transform_out():
         """Função usada para renderizar (na verdade coletar os dados) de Transform."""
@@ -174,6 +203,7 @@ class GL:
 
         # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
         print("Saindo de Transform")
+        GL.transform_stack.pop()
 
     @staticmethod
     def triangleStripSet(point, stripCount, colors):

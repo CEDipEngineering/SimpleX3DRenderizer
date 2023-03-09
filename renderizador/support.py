@@ -1,8 +1,9 @@
 
-from typing import List
+from typing import List, Tuple
+import numpy as np
 import math
 
-class CustomPoint():
+class CustomPoint2D():
     def __init__(self, x, y) -> None:
         self.x = x
         self.y = y
@@ -17,20 +18,85 @@ class CustomPoint():
     
     def __repr__(self) -> str:
         return self.__str__()
+    
+class CustomPoint3D():
+    def __init__(self, x, y, z, w=1) -> None:
+        self.x = x
+        self.y = y
+        self.z = z
+        self.w = w
 
+    def __sub__(self, other):
+        if other is CustomPoint3D:
+            return CustomPoint3D(self.x-other.x, self.y-other.y, self.z-other.z)
+        raise TypeError("CustomPoint3D only supports operations with other CustomPoint3D obejcts.")
+    
+    def __add__(self, other):
+        if other is CustomPoint3D:
+            return CustomPoint3D(self.x+other.x, self.y+other.y, self.z+other.z)
+        raise TypeError("CustomPoint3D only supports operations with other CustomPoint3D obejcts.")
+    
+    def __getitem__(self, i):
+        if i == 0:
+            return self.x
+        if i == 1:
+            return self.y
+        if i == 2:
+            return self.z
+        raise IndexError("Invalid index passed, must be 0,1,2 to access x,y,z coordinates.")
+    
+    def __setitem__(self, i, v):
+        if i == 0:
+            self.x = v
+        if i == 1:
+            self.y = v
+        if i == 2:
+            self.z = v
+        raise IndexError("Invalid index passed, must be 0,1,2 to access x,y,z coordinates.")
+    
+    def get_homo(self):
+        return (*self.get_pixel(), 1)
+
+    def get_pixel(self):
+        return (int(self.x), int(self.y), int(self.z))
+    
+    def homogeneous_division(self):
+        "Transforms inplace, but also returns self, just in case its used mid-operation"
+        self.x /= self.w
+        self.y /= self.w
+        self.z /= self.w
+        self.w /= self.w
+        return self
+
+    # Methods for debug printing
+    def __str__(self) -> str:
+        return "({:.1f},{:.1f},{:.1f})".format(self.x, self.y, self.z)
+    
+    def __repr__(self) -> str:
+        return self.__str__()
+    
 def get_emissive_rgb(color):
     # Initially using only emissive colors, later will use rest of color information
     c = color["emissiveColor"]
     return [int(255 * i) for i in c]
 
-def reshape_points(row) -> List[CustomPoint]:
+def reshape_points2D(row) -> List[CustomPoint2D]:
     # Row always has even number of values, each even index corresponds to x, each odd index corresponds to y.
     out = []
     for x, y in zip(row[::2],row[1::2]):
-        out.append(CustomPoint(x,y))
+        out.append(CustomPoint2D(x,y))
     return out
 
-def draw_line(p0: CustomPoint, p1: CustomPoint) -> List[CustomPoint]:
+def reshape_points3D(row) -> List[CustomPoint3D]:
+    # Row always has even number of values, each even index corresponds to x, each odd index corresponds to y.
+    # out = []
+    # for x, y, z in zip(row[::3], row[1::3], row[2::3]):
+    #     out.append(CustomPoint3D(x,y,z))
+    # return out
+    arr = np.array(row)
+    return np.reshape(arr, (-1, 3)).T
+
+def draw_line(p0: CustomPoint2D, p1: CustomPoint2D) -> List[CustomPoint2D]:
     """
     https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm#:~:text=Bresenham's%20line%20algorithm%20is%20a,straight%20line%20between%20two%20points.
     Implementation based on Bresenham algorithm using Wikipedia article as basis for solution
@@ -48,7 +114,7 @@ def draw_line(p0: CustomPoint, p1: CustomPoint) -> List[CustomPoint]:
         y = y0
         # Passo a passo, mantendo passo de x com tamanho 1, e inferindo se y muda ou nao, e quanto.
         for x in range(x0, x1+1):
-            line.append(CustomPoint(x, y))
+            line.append(CustomPoint2D(x, y))
             if D > 0:
                 y = y + yi
                 D = D + (2 * (dy - dx))
@@ -71,7 +137,7 @@ def draw_line(p0: CustomPoint, p1: CustomPoint) -> List[CustomPoint]:
         x = x0
 
         for y in range(y0, y1+1):
-            line.append(CustomPoint(x, y))
+            line.append(CustomPoint2D(x, y))
             if D > 0:
                 x = x + xi
                 D = D + (2 * (dx - dy))
@@ -102,7 +168,7 @@ def draw_line(p0: CustomPoint, p1: CustomPoint) -> List[CustomPoint]:
     
     return line
 
-def get_bounding_box_pixels(*args: List[CustomPoint]) -> List[CustomPoint]:
+def get_bounding_box_pixels(*args: List[CustomPoint2D]) -> List[CustomPoint2D]:
     """
     Given a polygon (list of points), determine the bounding box of said polygon, then return a list of every pixel in said box. 
     """
@@ -114,10 +180,10 @@ def get_bounding_box_pixels(*args: List[CustomPoint]) -> List[CustomPoint]:
     out = []
     for x in range(x_min, x_max+1):
         for y in range(y_min, y_max+1):
-            out.append(CustomPoint(x,y))
+            out.append(CustomPoint2D(x,y))
     return out
 
-def draw_triangle(p0: CustomPoint, p1: CustomPoint, p2: CustomPoint) -> List[CustomPoint]:
+def draw_triangle(p0: CustomPoint2D, p1: CustomPoint2D, p2: CustomPoint2D) -> List[CustomPoint2D]:
     # Bounding box optimization
     bounding_box = get_bounding_box_pixels(p0,p1,p2)
     out = []
@@ -128,7 +194,7 @@ def draw_triangle(p0: CustomPoint, p1: CustomPoint, p2: CustomPoint) -> List[Cus
             out.append(p)
     return out
 
-def inside(p: CustomPoint, tri: CustomPoint):
+def inside(p: CustomPoint2D, tri: CustomPoint2D):
     p0, p1, p2 = tri
     # Lambda function uses scalar product to determine semiplane in regards to line segment.
     L = lambda p, pi, pj: (pi.y - pj.y)*p.x - (pi.x - pj.x)*p.y + pi.y*(pi.x - pj.x) - (pi.y - pj.y)*pi.x
@@ -137,6 +203,112 @@ def inside(p: CustomPoint, tri: CustomPoint):
         if L(p, *side) > 0:
             return False # Outside correct semiplane -> outside triangle
     return True
+
+def look_at(camera_pos: CustomPoint3D, axis: np.array, angle: float):
+    # Usually camera is at (0,0,0), pointing at z=-1, and up is just ([0,1,0])
+    # w = at - camera_pos 
+    # w /= np.linalg.norm(at-camera_pos)
+    # u = np.cross(w, up)
+    # u /= np.linalg.norm(u)
+    # v = np.cross(u, w)
+    # v /= np.linalg.norm(v)
+
+    # rot = [[u[0] , u[1] , u[2] , 0],
+    #        [v[0] , v[1] , v[2] , 0],
+    #        [-w[0], -w[1], -w[2], 0],
+    #        [0    , 0    , 0    , 1]]
+
+    tran = np.array(
+        [
+            [1, 0, 0, -camera_pos.x],
+            [0, 1, 0, -camera_pos.y],
+            [0, 0, 1, -camera_pos.z],
+            [0, 0, 0,             1]
+        ]
+    )
+
+    orientation = quaternion_rotation_matrix(CustomPoint3D(axis[0], axis[1], axis[2]), angle)
+
+    mat = np.matmul(orientation, tran)
+
+    return mat
+
+def quaternion_rotation_matrix(axis: CustomPoint3D, angle: float):
+    sin = np.sin(angle/360*np.pi)
+    cos = np.cos(angle/360*np.pi)
+    i,j,k,r =   (
+                    axis.x * sin,
+                    axis.y * sin,
+                    axis.z * sin,
+                    cos
+                )
+    return np.array(
+        [
+            [1 - 2*(j**2 + k**2), 2*(i*j - k*r)      , 2*(i*k + j*r)      , 0],
+            [2*(i*j + k*r)      , 1 - 2*(i**2 + k**2), 2*(j*k + i*r)      , 0],
+            [2*(i*k - j*r)      , 2*(j*k + i*r)      , 1 - 2*(i**2 + j**2), 0],
+            [0                  , 0                  , 0                  , 1]
+        ]
+    )
+def make_transform(translation: CustomPoint3D, scale: CustomPoint3D, rotation: Tuple[CustomPoint3D, float]):
+    
+    # Translation matrix using homogeneous coordinates 
+    T = np.array(
+        [
+            [1,0,0,translation.x],
+            [0,1,0,translation.y],
+            [0,0,1,translation.z],
+            [0,0,0,            1],
+        ]
+    )
+
+    # Scale matrix
+    S = np.array(
+        [
+            [scale.x,0      ,0      ,0],
+            [0      ,scale.y,0      ,0],
+            [0      ,0      ,scale.z,0],
+            [0      ,0      ,0      ,1],
+        ]
+    )
+
+    # Quaternion rotation
+    R = quaternion_rotation_matrix(rotation[0], rotation[1])
+
+    # Return combination
+    TR = np.matmul(T, R)
+    return np.matmul(TR, S)
+
+def make_projection_matrix(near: float, far: float, fovd: float, w: int, h: int):
+    fovy = 2*np.arctan(np.tan(fovd/2)*h/(np.sqrt(w**2+h**2)))
+    top = near * np.tan(fovy)
+    right = top*(w/h)
+    P = np.array(
+        [  
+            [near/right, 0       , 0                     , 0                       ],
+            [0         , near/top, 0                     , 0                       ],
+            [0         , 0       , -(near+far)/(far-near), -2*(far*near)/(far-near)],
+            [0         , 0       , -1                    , 0                       ]
+        ]
+    )
+    E = np.array(
+        [  
+            [w/2, 0   , 0, w/2],
+            [0  , -h/2, 0, h/2],
+            [0  , 0   , 1, 0  ],
+            [0  , 0   , 0, 1  ]
+        ]
+    )
+    return np.matmul(P, E)
+
+def normalize_2d(projected: np.array) -> np.array:
+    out = []
+    for p in projected.T:
+        x,y,z,w = p
+        # print(p)
+        out.append(x/w)
+        out.append(y/w)
+    return out
 
 if __name__ == "__main__":
 
@@ -149,13 +321,17 @@ if __name__ == "__main__":
     # print(draw_line(*points))
 
     # Teste triangulo    
-    points = [ # 5.1, 5.5, 12.2, 17.4, 16.2, 10.1
-        CustomPoint(5.1, 5.5),
-        CustomPoint(12.2, 17.4),
-        CustomPoint(16.2, 10.1),
-    ]
+    # points = [ # 5.1, 5.5, 12.2, 17.4, 16.2, 10.1
+    #     CustomPoint2D(5.1, 5.5),
+    #     CustomPoint2D(12.2, 17.4),
+    #     CustomPoint2D(16.2, 10.1),
+    # ]
     
-    print(points)
-    print(draw_triangle(*points))
-    
+    # print(points)
+    # print(draw_triangle(*points))
+
+    points = [0,0,0, 1,1,1, 2,2,2, 3,3,3, 4,4,4, 5,5,5]
+    print(reshape_points3D(points))
+    print(reshape_points3D(list(range(15))))
+
     exit(0)
