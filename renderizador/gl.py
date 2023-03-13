@@ -133,18 +133,7 @@ class GL:
         # Exemplo de desenho de um pixel branco na coordenada 10, 10
         # gpu.GPU.draw_pixel([10, 10], gpu.GPU.RGB8, [255, 255, 255])  # altera pixel
 
-        # Transform, Project, 2D
-        arr = reshape_points3D(point)
-        homo = [1] * len(arr[0])
-        arr = list(arr)
-        arr.append(homo)
-        arr = np.array(arr)
-        # print(arr)
-        # print("SHAPES:  ", arr.shape, GL.transform_stack.peek().shape)
-        t = np.matmul(GL.transform_stack.peek(), arr)
-        p = np.matmul(GL.projection, t)
-        norm_2d = normalize_2d(p)
-        print("NORM2D: ", norm_2d)
+        norm_2d = prepare_points(point, GL.transform_stack.peek(), GL.projection)        
         GL.triangleSet2D(norm_2d, colors) 
 
 
@@ -162,7 +151,7 @@ class GL:
         print("orientation = {0} ".format(orientation), end='')
         print("fieldOfView = {0} ".format(fieldOfView))
         camera = look_at(CustomPoint3D(position[0], position[1], position[2]), CustomPoint3D(*orientation[:3]), orientation[-1])
-        # print("lookat:\n",camera)
+        print("lookat:\n",camera)
         project = make_projection_matrix(near=GL.near, far=GL.far, fovd=fieldOfView, w=GL.width, h=GL.height)
         # print(project)
         GL.projection = np.matmul(project, camera)
@@ -225,9 +214,18 @@ class GL:
             print("strip[{0}] = {1} ".format(i, strip), end='')
         print("")
         print("TriangleStripSet : colors = {0}".format(colors)) # imprime no terminal as cores
-
-        # Exemplo de desenho de um pixel branco na coordenada 10, 10
-        gpu.GPU.draw_pixel([10, 10], gpu.GPU.RGB8, [255, 255, 255])  # altera pixel
+        
+        norm_2d = prepare_points(point, GL.transform_stack.peek(), GL.projection)        
+        respoints = reshape_points2D(norm_2d)
+        for count in stripCount:
+            for i in range(count-2):
+                if i % 2 == 0:
+                    a,b,c = respoints[i], respoints[i+1], respoints[i+2]
+                else:
+                    a,b,c = respoints[i], respoints[i+2], respoints[i+1]
+                tri = draw_triangle(a,b,c)
+                for p in tri:
+                    gpu.GPU.draw_pixel(p.get_pixel(), gpu.GPU.RGB8, get_emissive_rgb(colors))
 
     @staticmethod
     def indexedTriangleStripSet(point, index, colors):
@@ -248,8 +246,16 @@ class GL:
         print("IndexedTriangleStripSet : pontos = {0}, index = {1}".format(point, index))
         print("IndexedTriangleStripSet : colors = {0}".format(colors)) # imprime as cores
 
-        # Exemplo de desenho de um pixel branco na coordenada 10, 10
-        gpu.GPU.draw_pixel([10, 10], gpu.GPU.RGB8, [255, 255, 255])  # altera pixel
+        norm_2d = prepare_points(point, GL.transform_stack.peek(), GL.projection)        
+        respoints = reshape_points2D(norm_2d)
+        for i in range(len(index)-2):
+            if i % 2 == 0:
+                a,b,c = respoints[index[i]], respoints[index[i+1]], respoints[index[i+2]]
+            else:
+                a,b,c = respoints[index[i]], respoints[index[i+2]], respoints[index[i+1]]
+            tri = draw_triangle(a,b,c)
+            for p in tri:
+                gpu.GPU.draw_pixel(p.get_pixel(), gpu.GPU.RGB8, get_emissive_rgb(colors))
 
     @staticmethod
     def box(size, colors):
