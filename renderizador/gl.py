@@ -289,7 +289,7 @@ class GL:
         VERTEX = np.matmul(SCALE, VERTEX.T).T
 
         INDEXES = [
-            0,1,2,2,0,3,
+            1,0,2,2,0,3,
             1,2,6,6,5,1,
             2,3,7,7,6,2,
             3,0,4,4,7,3,
@@ -297,7 +297,7 @@ class GL:
             4,5,6,6,7,4
         ]
 
-        print(VERTEX)
+        # print(VERTEX)
         points = [VERTEX[i] for i in INDEXES]    
         points = np.array(points).flatten()
         GL.triangleSet(points, colors)
