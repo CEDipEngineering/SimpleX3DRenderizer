@@ -289,7 +289,7 @@ def make_transform(translation: CustomPoint3D  = None, scale: CustomPoint3D  = N
     TR = np.matmul(T, R)
     return np.matmul(TR, S)
 
-def make_projection_matrix(near: float, far: float, fovd: float, w: int, h: int):
+def make_projection_matrix(near: float, far: float, fovd: float, w: int, h: int) -> np.array:
     fovy = 2*np.arctan(np.tan(fovd/2)*h/(np.sqrt(w**2+h**2)))
     top = near * np.tan(fovy)
     right = top*(w/h)
@@ -309,8 +309,8 @@ def make_projection_matrix(near: float, far: float, fovd: float, w: int, h: int)
             [0  , 0   , 0, 1  ]
         ]
     )
-    print("Persp\n",P)
-    print("Screen\n",E)
+    # print("Persp\n",P)
+    # print("Screen\n",E)
     return np.matmul(E, P)
 
 def normalize_2d(projected: np.array) -> np.array:
