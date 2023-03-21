@@ -15,6 +15,7 @@ import time         # Para operações com tempo
 import gpu          # Simula os recursos de uma GPU
 import math         # Funções matemáticas
 import numpy as np  # Biblioteca do Numpy
+from collections import deque
 
 from support import * # Implementacoes individuais
 from TransformStack import TransformStack # Pilha de transforms
@@ -46,7 +47,7 @@ class GL:
         # coordenada x do segundo ponto e assim por diante. Assuma a quantidade de pontos
         # pelo tamanho da lista e assuma que sempre vira uma quantidade par de valores.
         # O parâmetro colors é um dicionário com os tipos cores possíveis, para o Polypoint2D
-        # você pode assumir o desenho dos pontos com a cor emissiva (emissiveColor).
+        # você pode assumir inicialmente o desenho dos pontos com a cor emissiva (emissiveColor).
 
         # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
         # print("Polypoint2D : pontos = {0}".format(point)) # imprime no terminal pontos
@@ -72,7 +73,7 @@ class GL:
         # função pode receber mais pontos para desenhar vários segmentos. Assuma que sempre
         # vira uma quantidade par de valores.
         # O parâmetro colors é um dicionário com os tipos cores possíveis, para o Polyline2D
-        # você pode assumir o desenho das linhas com a cor emissiva (emissiveColor).
+        # você pode assumir inicialmente o desenho das linhas com a cor emissiva (emissiveColor).
 
         # print("Polyline2D : lineSegments = {0}".format(lineSegments)) # imprime no terminal
         # print("Polyline2D : colors = {0}".format(colors)) # imprime no terminal as cores
