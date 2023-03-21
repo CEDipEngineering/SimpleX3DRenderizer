@@ -194,7 +194,7 @@ def draw_triangle(p0: CustomPoint2D, p1: CustomPoint2D, p2: CustomPoint2D) -> Li
             out.append(p)
     return out
 
-def inside(p: CustomPoint2D, tri: CustomPoint2D):
+def inside(p: CustomPoint2D, tri: Tuple[CustomPoint2D, CustomPoint2D, CustomPoint2D]):
     p0, p1, p2 = tri
     # Lambda function uses scalar product to determine semiplane in regards to line segment.
     L = lambda p, pi, pj: (pi.y - pj.y)*p.x - (pi.x - pj.x)*p.y + pi.y*(pi.x - pj.x) - (pi.y - pj.y)*pi.x
