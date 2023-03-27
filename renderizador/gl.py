@@ -26,17 +26,19 @@ class GL:
     width = 800   # largura da tela
     height = 600  # altura da tela
     near = 0.01   # plano de corte próximo
-    far = 1000    # plano de corte distante
+    far = 200    # plano de corte distante
     transform_stack = TransformStack()
     projection = transform_stack.peek()
 
     @staticmethod
-    def setup(width, height, near=0.01, far=1000):
+    def setup(width, height, near=0.01, far=1000, SSAA=1, renderer=None):
         """Definr parametros para câmera de razão de aspecto, plano próximo e distante."""
         GL.width = width
         GL.height = height
         GL.near = near
         GL.far = far
+        GL.SSAA = SSAA
+        GL.renderer = renderer
 
     @staticmethod
     def polypoint2D(point, colors):
@@ -101,10 +103,12 @@ class GL:
         # print("TriangleSet2D : vertices = {0}".format(vertices)) # imprime no terminal
         # print("TriangleSet2D : colors = {0}".format(colors)) # imprime no terminal as cores
 
-        respoints = reshape_points2D(vertices)
-        in_screen = lambda pt2d: (pt2d.x>0 and pt2d.x<GL.width and pt2d.y>0 and pt2d.y<GL.height) # Frustum Culling
+        respoints = deque(reshape_points2D(vertices))
+        in_screen = lambda pt2d: (pt2d.x>0 and pt2d.x<(GL.width*GL.SSAA) and pt2d.y>0 and pt2d.y<(GL.height*GL.SSAA)) # Frustum Culling
+        if GL.SSAA != 1:
+            gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["HighRes"])
         while len(respoints) != 0:
-            a, b, c = respoints.pop(0), respoints.pop(0), respoints.pop(0) # pop is O(n), can replace with collections.deque later for O(1)
+            a, b, c = respoints.popleft(), respoints.popleft(), respoints.popleft()
             if not in_screen(a): continue
             if not in_screen(b): continue
             if not in_screen(c): continue
@@ -112,6 +116,9 @@ class GL:
             tri = draw_triangle(a,b,c)
             for p in tri:
                 gpu.GPU.draw_pixel(p.get_pixel(), gpu.GPU.RGB8, get_emissive_rgb(colors))
+        gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["FRONT"])
+            
+
 
 
     @staticmethod
@@ -134,11 +141,47 @@ class GL:
         # print("TriangleSet : pontos = {0}".format(point)) # imprime no terminal pontos
         # print("TriangleSet : colors = {0}".format(colors)) # imprime no terminal as cores
 
-        norm_2d = prepare_points(point, GL.transform_stack.peek(), GL.projection)        
-        GL.triangleSet2D(norm_2d, colors) 
+        norm_3d = prepare_points_3d(point, GL.transform_stack.peek(), GL.projection)        
+        tris = np.reshape(np.array(norm_3d), (-1, 3))
+        outside = lambda n: n<0.0 or n>1.0 # Simple macro
+        gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["DEPTH"])
+        for p0, p1, p2 in tris:
+            # Bounding box optimization
+            bounding_box = get_bounding_box_pixels(p0,p1,p2)
+            drawList = []
+            for p in bounding_box:
+                # Z-Buffer
+                print("bbox p: {}".format(p))
+                if gpu.GPU.read_pixel(p.get_flat_pixel(), gpu.GPU.DEPTH_COMPONENT32F) > p.z: continue # ja desenhamos coisas na frente
+                gpu.GPU.draw_pixel(p.get_flat_pixel(), gpu.GPU.DEPTH_COMPONENT32F, p.z) # novo ponto no buffer
+
+                # Baricentric coordinates (dot product)
+                bari = construct_baricentric_coordinates(p, [p0,p1,p2])
+                # 0 to 1 means inside
+                if outside(bari[0]): continue
+                if outside(bari[1]): continue
+                if outside(bari[2]): continue
+                alpha, beta, gamma = bari
+                # Append to list of drawable pixels.
+                drawList.append(
+                    CustomPoint3D(
+                        p.x,
+                        p.y,
+                        p.z,
+                        p.w,
+                        alpha,
+                        beta,
+                        gamma
+                    )
+                )
+        gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["FRONT"])
+        for p in drawList:
+            gpu.GPU.draw_pixel(p.get_flat_pixel(), gpu.GPU.RGB8, get_emissive_rgb(colors)) # novo ponto no buffer
 
 
+        
 
+        
     @staticmethod
     def viewpoint(position, orientation, fieldOfView):
         """Função usada para renderizar (na verdade coletar os dados) de Viewpoint."""
@@ -153,7 +196,7 @@ class GL:
         # print("fieldOfView = {0} ".format(fieldOfView))
         camera = look_at(CustomPoint3D(position[0], position[1], position[2]), CustomPoint3D(*orientation[:3]), orientation[-1])
         # print("lookat:\n",camera)
-        project = make_projection_matrix(near=GL.near, far=GL.far, fovd=fieldOfView, w=GL.width, h=GL.height)
+        project = make_projection_matrix(near=GL.near, far=GL.far, fovd=fieldOfView, w=GL.width*GL.SSAA, h=GL.height*GL.SSAA)
         # print(project)
         GL.projection = np.matmul(project, camera)
         # print(GL.projection)
@@ -249,6 +292,8 @@ class GL:
 
         norm_2d = prepare_points(point, GL.transform_stack.peek(), GL.projection)        
         respoints = reshape_points2D(norm_2d)
+        if GL.SSAA != 1:
+            gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["HighRes"])
         for i in range(len(index)-2):
             if i % 2 == 0:
                 a,b,c = respoints[index[i]], respoints[index[i+1]], respoints[index[i+2]]
@@ -257,7 +302,8 @@ class GL:
             tri = draw_triangle(a,b,c)
             for p in tri:
                 gpu.GPU.draw_pixel(p.get_pixel(), gpu.GPU.RGB8, get_emissive_rgb(colors))
-
+        gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["FRONT"])
+        
     @staticmethod
     def box(size, colors):
         """Função usada para renderizar Boxes."""

@@ -3,14 +3,44 @@ from typing import List, Tuple
 import numpy as np
 import math
 
+PRINT_TRANSFORMS = False
+
 class CustomPoint2D():
-    def __init__(self, x, y) -> None:
+    def __init__(self, x, y, color=(1,1,1)) -> None:
         self.x = x
         self.y = y
+        self.r, self.g, self.b = color
 
     def get_pixel(self):
         return (int(self.x), int(self.y))
 
+    def get_colot(self):
+        return (self.r, self.g, self.b)
+
+    def __sub__(self, other):
+        if other is CustomPoint2D:
+            return CustomPoint2D(self.x-other.x, self.y-other.y)
+        raise TypeError("CustomPoint2D only supports operations with other CustomPoint2D obejcts.")
+    
+    def __add__(self, other):
+        if other is CustomPoint2D:
+            return CustomPoint2D(self.x+other.x, self.y+other.y)
+        raise TypeError("CustomPoint2D only supports operations with other CustomPoint2D obejcts.")
+    
+    def __getitem__(self, i):
+        if i == 0:
+            return self.x
+        if i == 1:
+            return self.y
+        raise IndexError("Invalid index passed, must be 0,1 to access x,y coordinates.")
+    
+    def __setitem__(self, i, v):
+        if i == 0:
+            self.x = v
+        if i == 1:
+            self.y = v
+        raise IndexError("Invalid index passed, must be 0,1 to access x,y coordinates.")
+  
 
     # Methods for debug printing
     def __str__(self) -> str:
@@ -20,11 +50,14 @@ class CustomPoint2D():
         return self.__str__()
     
 class CustomPoint3D():
-    def __init__(self, x, y, z, w=1) -> None:
+    def __init__(self, x, y, z, w=1, alpha=0.3, beta=0.3, gamma=0.3) -> None:
         self.x = x
         self.y = y
         self.z = z
         self.w = w
+        self.alpha = alpha
+        self.beta = beta
+        self.gamma = gamma
 
     def __sub__(self, other):
         if other is CustomPoint3D:
@@ -54,11 +87,8 @@ class CustomPoint3D():
             self.z = v
         raise IndexError("Invalid index passed, must be 0,1,2 to access x,y,z coordinates.")
     
-    def get_homo(self):
-        return (*self.get_pixel(), 1)
-
-    def get_pixel(self):
-        return (int(self.x), int(self.y), int(self.z))
+    def get_flat_pixel(self):
+        return (int(self.x), int(self.y))
     
     def homogeneous_division(self):
         "Transforms inplace, but also returns self, just in case its used mid-operation"
@@ -68,9 +98,9 @@ class CustomPoint3D():
         self.w /= self.w
         return self
 
-    # Methods for debug printing
+    # Methods for debug printing255
     def __str__(self) -> str:
-        return "({:.1f},{:.1f},{:.1f})".format(self.x, self.y, self.z)
+        return "P3D:({:.5f},{:.5f},{:.5f},{:.5f})".format(self.x, self.y, self.z, self.w)
     
     def __repr__(self) -> str:
         return self.__str__()
@@ -168,7 +198,7 @@ def draw_line(p0: CustomPoint2D, p1: CustomPoint2D) -> List[CustomPoint2D]:
     
     return line
 
-def get_bounding_box_pixels(*args: List[CustomPoint2D]) -> List[CustomPoint2D]:
+def get_bounding_box_pixels(*args: List[CustomPoint2D]) -> List[CustomPoint3D]:
     """
     Given a polygon (list of points), determine the bounding box of said polygon, then return a list of every pixel in said box. 
     """
@@ -180,19 +210,41 @@ def get_bounding_box_pixels(*args: List[CustomPoint2D]) -> List[CustomPoint2D]:
     out = []
     for x in range(x_min, x_max+1):
         for y in range(y_min, y_max+1):
-            out.append(CustomPoint2D(x,y))
+            out.append(CustomPoint3D(x,y,0,1))
     return out
 
 def draw_triangle(p0: CustomPoint2D, p1: CustomPoint2D, p2: CustomPoint2D) -> List[CustomPoint2D]:
     # Bounding box optimization
     bounding_box = get_bounding_box_pixels(p0,p1,p2)
     out = []
+    outside = lambda n: n<0.0 or n>1.0
     for p in bounding_box:
         #compute whether inside triangle
-        if inside(p, [p0,p1,p2]):
-            # print("{}: is inside!".format(p))
-            out.append(p)
+        # Baricentric
+        bari = construct_baricentric_coordinates(p, [p0,p1,p2])
+        # 0 to 1 means inside
+        if outside(bari[0]): continue
+        if outside(bari[1]): continue
+        if outside(bari[2]): continue
+        # print("{}: is inside!".format(p))
+        out.append(p)
     return out
+
+def construct_baricentric_coordinates(p: CustomPoint2D, tri: List[CustomPoint2D]):
+    a,b,c = tri
+    
+    alpha_num = (-(p[0]-b[0])*(c[1]-b[1]) + (p[1] - b[1]) * (c[0] - b[0]))
+    alpha_den = (-(a[0] - b[0])*(c[1] - b[1]) + (a[1] - b[1])*(c[0] - b[0]))
+    if alpha_den == 0: alpha_den = 1e-10
+    alpha = alpha_num/alpha_den
+    
+    beta_num = (-(p[0]-c[0])*(a[1]-c[1]) + (p[1] - c[1]) * (a[0] - c[0]))
+    beta_den = (-(b[0] - c[0])*(a[1] - c[1]) + (b[1] - c[1])*(a[0] - c[0]))
+    if beta_den == 0: beta_den = 1e-10
+    beta = beta_num/beta_den
+    
+    gamma = 1 - alpha - beta
+    return np.array([alpha, beta, gamma])
 
 def inside(p: CustomPoint2D, tri: Tuple[CustomPoint2D, CustomPoint2D, CustomPoint2D]):
     p0, p1, p2 = tri
@@ -252,6 +304,7 @@ def quaternion_rotation_matrix(axis: CustomPoint3D, angle: float):
             [0                  , 0                  , 0                  , 1]
         ]
     )
+
 def make_transform(translation: CustomPoint3D  = None, scale: CustomPoint3D  = None, rotation: Tuple[CustomPoint3D, float] = None):
     
     translation = CustomPoint3D(0,0,0) if not translation else CustomPoint3D(*translation)
@@ -287,31 +340,34 @@ def make_transform(translation: CustomPoint3D  = None, scale: CustomPoint3D  = N
     # print(S)
     # Return combination
     TR = np.matmul(T, R)
-    return np.matmul(TR, S)
+    TRS = np.matmul(TR, S)
+    return TRS
 
 def make_projection_matrix(near: float, far: float, fovd: float, w: int, h: int) -> np.array:
-    fovy = 2*np.arctan(np.tan(fovd/2)*h/(np.sqrt(w**2+h**2)))
+    fovy = 2.0*np.arctan(np.tan(fovd/2.0)*h/(np.sqrt(w**2.0+h**2.0)))
     top = near * np.tan(fovy)
     right = top*(w/h)
     P = np.array(
         [  
-            [near/right, 0       , 0                     , 0                       ],
-            [0         , near/top, 0                     , 0                       ],
-            [0         , 0       , -(near+far)/(far-near), -2*(far*near)/(far-near)],
-            [0         , 0       , -1                    , 0                       ]
+            [near/right, 0.0       , 0.0                     , 0.0                       ],
+            [0.0         , near/top, 0.0                     , 0.0                       ],
+            [0.0         , 0.0       , -(near+far)/(far-near), -2*(far*near)/(far-near)],
+            [0.0         , 0.0       , -1                    , 0.0                       ]
         ]
     )
     E = np.array(
         [  
-            [w/2, 0   , 0, w/2],
-            [0  , -h/2, 0, h/2],
-            [0  , 0   , 1, 0  ],
-            [0  , 0   , 0, 1  ]
+            [w/2.0, 0.0   , 0.0, w/2.0],
+            [0.0  , -h/2.0, 0.0, h/2.0],
+            [0.0  , 0.0   , 1.0, 0.0  ],
+            [0.0  , 0.0   , 0.0, 1.0  ]
         ]
     )
-    # print("Persp\n",P)
-    # print("Screen\n",E)
+    if PRINT_TRANSFORMS:
+        print("Perspective:\n{}".format(P))
+        print("Screen:\n{}".format(E))
     return np.matmul(E, P)
+    # return P
 
 def normalize_2d(projected: np.array) -> np.array:
     out = []
@@ -320,6 +376,12 @@ def normalize_2d(projected: np.array) -> np.array:
         # print(p)
         out.append(x/w)
         out.append(y/w)
+    return out
+
+def normalize_3d(projected: np.array) -> np.array:
+    out = []
+    for p in projected.T:
+        out.append(CustomPoint3D(*p).homogeneous_division())
     return out
 
 def prepare_points(points: np.array, model: np.array, view: np.array) -> np.array:
@@ -331,6 +393,21 @@ def prepare_points(points: np.array, model: np.array, view: np.array) -> np.arra
     t = np.matmul(model, arr)
     p = np.matmul(view, t)
     return normalize_2d(p)
+
+def prepare_points_3d(points: np.array, model: np.array, view: np.array) -> np.array:
+    if PRINT_TRANSFORMS:
+        print("Model:\n{}".format(model))
+        print("View:\n{}".format(view))
+    arr = reshape_points3D(points)
+    homo = [1] * len(arr[0])
+    arr = list(arr)
+    arr.append(homo)
+    arr = np.array(arr)  
+    t = np.matmul(model, arr)
+    # if PRINT_TRANSFORMS: print("Points NDC:\n{}".format(t))
+    p = np.matmul(view, t)
+    return normalize_3d(p)
+
 
 if __name__ == "__main__":
 

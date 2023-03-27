@@ -19,6 +19,7 @@ import gpu          # Simula os recursos de uma GPU
 
 import x3d          # Faz a leitura do arquivo X3D, gera o grafo de cena e faz traversal
 import scenegraph   # Imprime o grafo de cena no console
+import numpy as np
 
 LARGURA = 60  # Valor padrão para largura da tela
 ALTURA = 40   # Valor padrão para altura da tela
@@ -35,16 +36,19 @@ class Renderizador:
         self.image_file = "tela.png"
         self.scene = None
         self.framebuffers = {}
+        self.SSAA = 1
 
     def setup(self):
         """Configura o sistema para a renderização."""
         # Configurando color buffers para exibição na tela
 
         # Cria uma (1) posição de FrameBuffer na GPU
-        fbo = gpu.GPU.gen_framebuffers(1)
+        fbo = gpu.GPU.gen_framebuffers(3)
 
         # Define o atributo FRONT como o FrameBuffe principal
         self.framebuffers["FRONT"] = fbo[0]
+        self.framebuffers["DEPTH"] = fbo[1]
+        self.framebuffers["HighRes"] = fbo[2]
 
         # Define que a posição criada será usada para desenho e leitura
         gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, self.framebuffers["FRONT"])
@@ -65,13 +69,23 @@ class Renderizador:
         )
 
         # Descomente as seguintes linhas se for usar um Framebuffer para profundidade
-        # gpu.GPU.framebuffer_storage(
-        #     self.framebuffers["FRONT"],
-        #     gpu.GPU.DEPTH_ATTACHMENT,
-        #     gpu.GPU.DEPTH_COMPONENT32F,
-        #     self.width,
-        #     self.height
-        # )
+        gpu.GPU.framebuffer_storage(
+            self.framebuffers["DEPTH"],
+            gpu.GPU.DEPTH_ATTACHMENT,
+            gpu.GPU.DEPTH_COMPONENT32F,
+            self.width,
+            self.height
+        )
+
+        gpu.GPU.framebuffer_storage(
+            self.framebuffers["HighRes"],
+            gpu.GPU.COLOR_ATTACHMENT,
+            gpu.GPU.RGB8,
+            self.width * self.SSAA,
+            self.height * self.SSAA
+        )
+        gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, self.framebuffers["FRONT"])
+
     
         # Opções:
         # - COLOR_ATTACHMENT: alocações para as cores da imagem renderizada
@@ -108,6 +122,23 @@ class Renderizador:
     def pos(self):
         """Rotinas pós renderização."""
         # Função invocada após o processo de renderização terminar.
+        ## Super Sampling Anti-Aliasing
+        if self.SSAA != 1:
+            gpu.GPU.bind_framebuffer(gpu.GPU.READ_FRAMEBUFFER, self.framebuffers["HighRes"])
+            gpu.GPU.bind_framebuffer(gpu.GPU.DRAW_FRAMEBUFFER, self.framebuffers["FRONT"])
+            for i in range(0, self.width):
+                u = i * self.SSAA
+                for j in range(0, self.height):
+                    v = j * self.SSAA
+                    rgb = np.array([0.0,0.0,0.0])
+                    for xoff in range(self.SSAA):
+                        for yoff in range(self.SSAA):
+                            rgb += gpu.GPU.read_pixel((u + xoff, v + yoff), gpu.GPU.RGB8)
+                    rgb *= 1/(self.SSAA*self.SSAA)
+                    rgb = tuple(rgb.astype(int))
+                    gpu.GPU.draw_pixel((i,j), gpu.GPU.RGB8, rgb)
+                    
+            gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, self.framebuffers["FRONT"])
 
         # Método para a troca dos buffers (NÃO IMPLEMENTADO)
         gpu.GPU.swap_buffers()
@@ -176,7 +207,9 @@ class Renderizador:
             self.width,
             self.height,
             near=0.01,
-            far=1000
+            far=200,
+            SSAA = self.SSAA,
+            renderer = self
         )
 
         # Funções que irão fazer o rendering
