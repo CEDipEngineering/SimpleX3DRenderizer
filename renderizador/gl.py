@@ -16,9 +16,11 @@ import gpu          # Simula os recursos de uma GPU
 import math         # Funções matemáticas
 import numpy as np  # Biblioteca do Numpy
 from collections import deque
+from itertools import zip_longest
 
 from support import * # Implementacoes individuais
 from TransformStack import TransformStack # Pilha de transforms
+from Mipmap import Mipmap # Implementacao de mipmap
 
 class GL:
     """Classe que representa a biblioteca gráfica (Graphics Library)."""
@@ -301,7 +303,7 @@ class GL:
                 a,b,c = respoints[index[i]], respoints[index[i+2]], respoints[index[i+1]]
             tri = draw_triangle(a,b,c)
             for p in tri:
-                gpu.GPU.draw_pixel(p.get_pixel(), gpu.GPU.RGB8, get_emissive_rgb(colors))
+                gpu.GPU.draw_pixel(p.get_flat_pixel(), gpu.GPU.RGB8, get_emissive_rgb(colors))
         gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["FRONT"])
         
     @staticmethod
@@ -386,13 +388,54 @@ class GL:
         #     print("\t Matriz com image = {0}".format(image))
         #     print("\t Dimensões da image = {0}".format(image.shape))
         # print("IndexedFaceSet : colors = {0}".format(colors))  # imprime no terminal as cores
-        new_index = []
-        for i in coordIndex:
-            if i == -1:
-                GL.indexedTriangleStripSet(coord, new_index, colors)
-                new_index = []
+        if texCoord and texCoordIndex and current_texture:
+            mipmap = Mipmap(gpu.GPU.load_texture(current_texture[0]))
+            return
+
+        norm_3d = prepare_points_3d(coord, GL.transform_stack.peek(), GL.projection)
+        print(norm_3d)       
+        outside = lambda n: n<0.0 or n>1.0 # Simple macro
+        if colorPerVertex and color:
+            color = np.reshape(color, (-1, 3))
+        curr_tri = deque(maxlen=3)
+        for i, e in enumerate(zip_longest(coordIndex, colorIndex)):
+            if e[0] == -1:
+                curr_tri = deque(maxlen=3)
                 continue
-            new_index.append(i)
+            curr_tri.append(e)
+            if len(curr_tri) == 3:
+                a, b, c = curr_tri
+                p0, p1, p2 = norm_3d[a[0]], norm_3d[b[0]], norm_3d[c[0]]
+                if colorPerVertex and color: c0, c1, c2 = color[a[1]], color[b[1]], color[c[1]]
+
+                # Bounding box optimization
+                bounding_box = get_bounding_box_pixels(p0,p1,p2)
+                for p in bounding_box:
+                    # Z-Buffer
+                    # print("bbox p: {}".format(p))
+                    # if gpu.GPU.read_pixel(p.get_flat_pixel(), gpu.GPU.DEPTH_COMPONENT32F) > p.z: continue # ja desenhamos coisas na frente
+                    # gpu.GPU.draw_pixel(p.get_flat_pixel(), gpu.GPU.DEPTH_COMPONENT32F, p.z) # novo ponto no buffer
+
+                    # Baricentric coordinates (dot product)
+                    bari = construct_baricentric_coordinates(p, [p0,p1,p2])
+                    # 0 to 1 means inside
+                    if outside(bari[0]): continue
+                    if outside(bari[1]): continue
+                    if outside(bari[2]): continue
+                    alpha, beta, gamma = bari
+                    p.z = 1/(alpha/p0.z + beta/p1.z + gamma/p2.z) # Interpolate z coordinate with harmonic weighted mean
+                    # Draw
+                    if not color:
+                        gpu.GPU.draw_pixel(p.get_flat_pixel(), gpu.GPU.RGB8, get_emissive_rgb(colors)) # novo ponto no buffer
+                    else: # Draw color per vertex means we must interpolate with baricentric coordinates
+                        r, g, b = (alpha*c0*(1/p0.z) + beta*c1*(1/p1.z) + gamma*c2*(1/p2.z))*p.z # Compute weighted RGB by z
+                        # Convert to 0.255 int
+                        r = int(r * 255)
+                        g = int(g * 255)
+                        b = int(b * 255)
+                        # print(p)
+                        gpu.GPU.draw_pixel(p.get_flat_pixel(), gpu.GPU.RGB8, (r,g,b)) # novo ponto no buffer
+
 
     @staticmethod
     def sphere(radius, colors):

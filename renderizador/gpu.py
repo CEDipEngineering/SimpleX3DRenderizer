@@ -152,6 +152,7 @@ class GPU:
         """Retorna o valor do pixel no framebuffer."""
         if coord:
             fb_dim = GPU.frame_buffer[GPU.read_framebuffer].color.shape
+            print(fb_dim)
             if coord[0] < 0 or coord[0] >= fb_dim[1] or coord[1] < 0 or coord[1] >= fb_dim[0]:
                 raise Exception(f"Acesso irregular de leitura na posição [{coord[0]}, {coord[1]}] do Framebuffer {fb_dim[1], fb_dim[0]}")
             if mode in (GPU.RGB8, GPU.RGBA8):  # cores
