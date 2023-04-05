@@ -73,8 +73,8 @@ class Renderizador:
             self.framebuffers["DEPTH"],
             gpu.GPU.DEPTH_ATTACHMENT,
             gpu.GPU.DEPTH_COMPONENT32F,
-            self.width,
-            self.height
+            self.width * self.SSAA,
+            self.height * self.SSAA
         )
 
         gpu.GPU.framebuffer_storage(
@@ -207,7 +207,7 @@ class Renderizador:
             self.width,
             self.height,
             near=0.01,
-            far=200,
+            far=1000,
             SSAA = self.SSAA,
             renderer = self
         )

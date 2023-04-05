@@ -154,8 +154,8 @@ def draw_line(p0: CustomPoint2D, p1: CustomPoint2D) -> List[CustomPoint2D]:
 
     # Repetir procedimento para x trocado com y, para pega inclinacoes de sinais diferentes
     def plotLineHigh(x1, y1, x0, y0):
-        print(x0,y0)
-        print(x1,y1)
+        # print(x0,y0)
+        # print(x1,y1)
         line = []
         dx = x1 - x0
         dy = y1 - y0
@@ -180,20 +180,20 @@ def draw_line(p0: CustomPoint2D, p1: CustomPoint2D) -> List[CustomPoint2D]:
     
     # Teste para usar High vs. Low
     if abs(y1 - y0) < abs(x1 - x0):
-        print("Low")
+        # print("Low")
         if x0 < x1:
-            print("reverse")
+            # print("reverse")
             line = plotLineLow(x1, y1, x0, y0)
         else:
-            print("normal")
+            # print("normal")
             line = plotLineLow(x0, y0, x1, y1)
     else:
-        print("High")
+        # print("High")
         if y0 < y1:
-            print("reverse")
+            # print("reverse")
             line = plotLineHigh(x1, y1, x0, y0)
         else:
-            print("normal")
+            # print("normal")
             line = plotLineHigh(x0, y0, x1, y1)
     
     return line

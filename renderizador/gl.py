@@ -28,7 +28,7 @@ class GL:
     width = 800   # largura da tela
     height = 600  # altura da tela
     near = 0.01   # plano de corte próximo
-    far = 200    # plano de corte distante
+    far = 1000    # plano de corte distante
     transform_stack = TransformStack()
     projection = transform_stack.peek()
 
@@ -107,8 +107,7 @@ class GL:
 
         respoints = deque(reshape_points2D(vertices))
         in_screen = lambda pt2d: (pt2d.x>0 and pt2d.x<(GL.width*GL.SSAA) and pt2d.y>0 and pt2d.y<(GL.height*GL.SSAA)) # Frustum Culling
-        if GL.SSAA != 1:
-            gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["HighRes"])
+        if GL.SSAA != 1: gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["HighRes"]) # SSAA
         while len(respoints) != 0:
             a, b, c = respoints.popleft(), respoints.popleft(), respoints.popleft()
             if not in_screen(a): continue
@@ -117,7 +116,7 @@ class GL:
             # print(a,b,c)
             tri = draw_triangle(a,b,c)
             for p in tri:
-                gpu.GPU.draw_pixel(p.get_pixel(), gpu.GPU.RGB8, get_emissive_rgb(colors))
+                gpu.GPU.draw_pixel(p.get_flat_pixel(), gpu.GPU.RGB8, get_emissive_rgb(colors))
         gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["FRONT"])
             
 
@@ -153,8 +152,8 @@ class GL:
             drawList = []
             for p in bounding_box:
                 # Z-Buffer
-                print("bbox p: {}".format(p))
-                if gpu.GPU.read_pixel(p.get_flat_pixel(), gpu.GPU.DEPTH_COMPONENT32F) > p.z: continue # ja desenhamos coisas na frente
+                # print("bbox p: {}".format(p))
+                if gpu.GPU.read_pixel(p.get_flat_pixel(), gpu.GPU.DEPTH_COMPONENT32F) < p.z: continue # ja desenhamos coisas na frente
                 gpu.GPU.draw_pixel(p.get_flat_pixel(), gpu.GPU.DEPTH_COMPONENT32F, p.z) # novo ponto no buffer
 
                 # Baricentric coordinates (dot product)
@@ -177,8 +176,17 @@ class GL:
                     )
                 )
         gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["FRONT"])
+        if GL.SSAA != 1: gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["HighRes"]) # SSAA
         for p in drawList:
-            gpu.GPU.draw_pixel(p.get_flat_pixel(), gpu.GPU.RGB8, get_emissive_rgb(colors)) # novo ponto no buffer
+            # print(p)
+            prev = gpu.GPU.read_pixel(p.get_flat_pixel(), gpu.GPU.RGB8)
+            alpha = colors["transparency"]
+            prev = np.array(prev,dtype=np.float64)*alpha
+            curr = get_emissive_rgb(colors)
+            curr = np.array(curr,dtype=np.float64)*(1-alpha)
+            r,g,b = curr+prev
+            gpu.GPU.draw_pixel(p.get_flat_pixel(), gpu.GPU.RGB8, (r,g,b)) # novo ponto no buffer
+        gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["FRONT"])
 
 
         
@@ -387,15 +395,19 @@ class GL:
         #     image = gpu.GPU.load_texture(current_texture[0])
         #     print("\t Matriz com image = {0}".format(image))
         #     print("\t Dimensões da image = {0}".format(image.shape))
-        # print("IndexedFaceSet : colors = {0}".format(colors))  # imprime no terminal as cores
+        print("IndexedFaceSet : colors = {0}".format(colors))  # imprime no terminal as cores
+        
+        
         if texCoord and texCoordIndex and current_texture:
             mipmap = Mipmap(gpu.GPU.load_texture(current_texture[0]))
             return
 
+        if color is None: colorPerVertex = False
+
         norm_3d = prepare_points_3d(coord, GL.transform_stack.peek(), GL.projection)
-        print(norm_3d)       
+        # print(norm_3d)       
         outside = lambda n: n<0.0 or n>1.0 # Simple macro
-        if colorPerVertex and color:
+        if colorPerVertex:
             color = np.reshape(color, (-1, 3))
         curr_tri = deque(maxlen=3)
         for i, e in enumerate(zip_longest(coordIndex, colorIndex)):
@@ -406,15 +418,20 @@ class GL:
             if len(curr_tri) == 3:
                 a, b, c = curr_tri
                 p0, p1, p2 = norm_3d[a[0]], norm_3d[b[0]], norm_3d[c[0]]
-                if colorPerVertex and color: c0, c1, c2 = color[a[1]], color[b[1]], color[c[1]]
+                if colorPerVertex: c0, c1, c2 = color[a[1]], color[b[1]], color[c[1]]
 
                 # Bounding box optimization
                 bounding_box = get_bounding_box_pixels(p0,p1,p2)
                 for p in bounding_box:
                     # Z-Buffer
                     # print("bbox p: {}".format(p))
-                    # if gpu.GPU.read_pixel(p.get_flat_pixel(), gpu.GPU.DEPTH_COMPONENT32F) > p.z: continue # ja desenhamos coisas na frente
-                    # gpu.GPU.draw_pixel(p.get_flat_pixel(), gpu.GPU.DEPTH_COMPONENT32F, p.z) # novo ponto no buffer
+                    gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["DEPTH"])
+                    if gpu.GPU.read_pixel(p.get_flat_pixel(), gpu.GPU.DEPTH_COMPONENT32F) > p.z: continue # ja desenhamos coisas na frente
+                    gpu.GPU.draw_pixel(p.get_flat_pixel(), gpu.GPU.DEPTH_COMPONENT32F, p.z) # novo ponto no buffer
+                    gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["FRONT"])
+                    if GL.SSAA != 1: gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["HighRes"]) # SSAA
+
+                    
 
                     # Baricentric coordinates (dot product)
                     bari = construct_baricentric_coordinates(p, [p0,p1,p2])
@@ -424,18 +441,26 @@ class GL:
                     if outside(bari[2]): continue
                     alpha, beta, gamma = bari
                     p.z = 1/(alpha/p0.z + beta/p1.z + gamma/p2.z) # Interpolate z coordinate with harmonic weighted mean
-                    # Draw
-                    if not color:
-                        gpu.GPU.draw_pixel(p.get_flat_pixel(), gpu.GPU.RGB8, get_emissive_rgb(colors)) # novo ponto no buffer
+                    # Drawing
+                    if not colorPerVertex: # Solid colors, just use emissive
+                        r, g, b = get_emissive_rgb(colors)
                     else: # Draw color per vertex means we must interpolate with baricentric coordinates
                         r, g, b = (alpha*c0*(1/p0.z) + beta*c1*(1/p1.z) + gamma*c2*(1/p2.z))*p.z # Compute weighted RGB by z
                         # Convert to 0.255 int
                         r = int(r * 255)
                         g = int(g * 255)
                         b = int(b * 255)
-                        # print(p)
-                        gpu.GPU.draw_pixel(p.get_flat_pixel(), gpu.GPU.RGB8, (r,g,b)) # novo ponto no buffer
-
+                    # After getting r,g,b compute transparency
+                    prev = gpu.GPU.read_pixel(p.get_flat_pixel(), gpu.GPU.RGB8)
+                    alpha = colors["transparency"]
+                    prev = np.array(prev,dtype=np.float64)*alpha
+                    curr = get_emissive_rgb(colors)
+                    curr = np.array(curr,dtype=np.float64)*(1-alpha)
+                    r,g,b = curr+prev
+                    # Draw after transparency
+                    gpu.GPU.draw_pixel(p.get_flat_pixel(), gpu.GPU.RGB8, (r,g,b))
+        gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["FRONT"])
+        return
 
     @staticmethod
     def sphere(radius, colors):
