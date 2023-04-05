@@ -65,10 +65,30 @@ class CustomPoint3D():
         raise TypeError("CustomPoint3D only supports operations with other CustomPoint3D obejcts.")
     
     def __add__(self, other):
-        if other is CustomPoint3D:
+        if type(other) is CustomPoint3D:
             return CustomPoint3D(self.x+other.x, self.y+other.y, self.z+other.z)
         raise TypeError("CustomPoint3D only supports operations with other CustomPoint3D obejcts.")
     
+    def __mul__(self, other):
+        if type(other) not in [int, float]:
+            raise TypeError("Multiplcating points is only available for scalars (int/float). Provided {}".format(type(other)))
+        return CustomPoint3D(
+            self.x*other,
+            self.y*other,
+            self.z*other,
+            self.w
+        )
+    
+    def __rmul__(self, other):
+        if type(other) not in [int, float]:
+            raise TypeError("Multiplcating points is only available for scalars (int/float). Provided {}".format(type(other)))
+        return CustomPoint3D(
+            self.x*other,
+            self.y*other,
+            self.z*other,
+            self.w
+        )
+
     def __getitem__(self, i):
         if i == 0:
             return self.x
@@ -100,7 +120,7 @@ class CustomPoint3D():
 
     # Methods for debug printing255
     def __str__(self) -> str:
-        return "P3D:({:.5f},{:.5f},{:.5f},{:.5f})".format(self.x, self.y, self.z, self.w)
+        return "P3D:({},{},{},{})".format(self.x, self.y, self.z, self.w)
     
     def __repr__(self) -> str:
         return self.__str__()

@@ -21,6 +21,14 @@ from itertools import zip_longest
 from support import * # Implementacoes individuais
 from TransformStack import TransformStack # Pilha de transforms
 from Mipmap import Mipmap # Implementacao de mipmap
+from icosphere import icosphere # Ver icosphere.py
+
+DEBUG_COLORS = True
+
+## lambdas
+outside = lambda n: n<0.0 or n>1.0 # Triangle interior check
+in_screen = lambda pt2d: (pt2d.x>0 and pt2d.x<(GL.width*GL.SSAA) and pt2d.y>0 and pt2d.y<(GL.height*GL.SSAA)) # Frustum Culling
+
 
 class GL:
     """Classe que representa a biblioteca gráfica (Graphics Library)."""
@@ -104,7 +112,6 @@ class GL:
         # print("TriangleSet2D : colors = {0}".format(colors)) # imprime no terminal as cores
 
         respoints = deque(reshape_points2D(vertices))
-        in_screen = lambda pt2d: (pt2d.x>0 and pt2d.x<(GL.width*GL.SSAA) and pt2d.y>0 and pt2d.y<(GL.height*GL.SSAA)) # Frustum Culling
         if GL.SSAA != 1: gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["HIGHRES"]) # SSAA
         while len(respoints) != 0:
             a, b, c = respoints.popleft(), respoints.popleft(), respoints.popleft()
@@ -139,9 +146,11 @@ class GL:
 
         norm_3d = prepare_points_3d(point, GL.transform_stack.peek(), GL.projection)        
         tris = np.reshape(np.array(norm_3d), (-1, 3))
-        outside = lambda n: n<0.0 or n>1.0 # Simple macro
         gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["DEPTH"])
-        for p0, p1, p2 in tris:
+        for tri in tris:
+            # Unpack vertices
+            p0, p1, p2 = tri
+            
             # Bounding box optimization
             bounding_box = get_bounding_box_pixels(p0,p1,p2)
             drawList = []
@@ -173,17 +182,30 @@ class GL:
                     )
                 )
 
+        # Bind buffer
         gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["FRONT"])
         if GL.SSAA != 1: gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["HIGHRES"]) # SSAA
+
+        # Random face colors, for debugging
+        if DEBUG_COLORS: r,g,b = np.random.randint(0,256, size=(3))
+
+        # Drawloop
         for p in drawList:
-            # print(p)
+            # Colors
+            if not DEBUG_COLORS: r, g, b = get_emissive_rgb(colors)
+
+            # Transparency
             prev = gpu.GPU.read_pixel(p.get_flat_pixel(), gpu.GPU.RGB8)
             alpha = colors["transparency"]
             prev = np.array(prev,dtype=np.float64)*alpha
-            curr = get_emissive_rgb(colors)
+            curr = [r,g,b]
             curr = np.array(curr,dtype=np.float64)*(1-alpha)
             r,g,b = curr+prev
-            gpu.GPU.draw_pixel(p.get_flat_pixel(), gpu.GPU.RGB8, (r,g,b)) # novo ponto no buffer
+            
+            # Draw
+            gpu.GPU.draw_pixel(p.get_flat_pixel(), gpu.GPU.RGB8, (r,g,b))            
+
+        # Rebind buffer
         gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["FRONT"])
 
     @staticmethod
@@ -262,17 +284,23 @@ class GL:
         # print("")
         # print("TriangleStripSet : colors = {0}".format(colors)) # imprime no terminal as cores
         
-        norm_2d = prepare_points(point, GL.transform_stack.peek(), GL.projection)        
-        respoints = reshape_points2D(norm_2d)
+        norm_3d = prepare_points_3d(point, GL.transform_stack.peek(), GL.projection)      
+        if GL.SSAA != 1: gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["HIGHRES"])
         for count in stripCount:
             for i in range(count-2):
                 if i % 2 == 0:
-                    a,b,c = respoints[i], respoints[i+1], respoints[i+2]
+                    p0,p1,p2 = norm_3d[i], norm_3d[i+1], norm_3d[i+2]
                 else:
-                    a,b,c = respoints[i], respoints[i+2], respoints[i+1]
-                tri = draw_triangle(a,b,c)
+                    p0,p1,p2 = norm_3d[i], norm_3d[i+2], norm_3d[i+1]
+                # Random face colors, for debugging
+                if DEBUG_COLORS: 
+                    r,g,b = np.random.randint(0,256, size=(3))
+                else:
+                    r,g,b = get_emissive_rgb(colors)
+                tri = draw_triangle(p0,p1,p2)
                 for p in tri:
-                    gpu.GPU.draw_pixel(p.get_pixel(), gpu.GPU.RGB8, get_emissive_rgb(colors))
+                    gpu.GPU.draw_pixel(p.get_flat_pixel(), gpu.GPU.RGB8, (r,g,b))
+        gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["FRONT"])
 
     @staticmethod
     def indexedTriangleStripSet(point, index, colors):
@@ -293,18 +321,21 @@ class GL:
         # print("IndexedTriangleStripSet : pontos = {0}, index = {1}".format(point, index))
         # print("IndexedTriangleStripSet : colors = {0}".format(colors)) # imprime as cores
 
-        norm_2d = prepare_points(point, GL.transform_stack.peek(), GL.projection)        
-        respoints = reshape_points2D(norm_2d)
-        if GL.SSAA != 1:
-            gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["HIGHRES"])
+        norm_3d = prepare_points_3d(point, GL.transform_stack.peek(), GL.projection)      
+        if GL.SSAA != 1: gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["HIGHRES"])
         for i in range(len(index)-2):
             if i % 2 == 0:
-                a,b,c = respoints[index[i]], respoints[index[i+1]], respoints[index[i+2]]
+                p0,p1,p2 = norm_3d[index[i]], norm_3d[index[i+1]], norm_3d[index[i+2]]
             else:
-                a,b,c = respoints[index[i]], respoints[index[i+2]], respoints[index[i+1]]
-            tri = draw_triangle(a,b,c)
+                p0,p1,p2 = norm_3d[index[i]], norm_3d[index[i+2]], norm_3d[index[i+1]]
+            # Random face colors, for debugging
+            if DEBUG_COLORS: 
+                r,g,b = np.random.randint(0,256, size=(3))
+            else:
+                r,g,b = get_emissive_rgb(colors)
+            tri = draw_triangle(p0,p1,p2)
             for p in tri:
-                gpu.GPU.draw_pixel(p.get_flat_pixel(), gpu.GPU.RGB8, get_emissive_rgb(colors))
+                gpu.GPU.draw_pixel(p.get_flat_pixel(), gpu.GPU.RGB8, (r,g,b))
         gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["FRONT"])
         
     @staticmethod
@@ -320,37 +351,89 @@ class GL:
         # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
         # print("Box : size = {0}".format(size)) # imprime no terminal pontos
         # print("Box : colors = {0}".format(colors)) # imprime no terminal as cores
-        SCALE = [
+        scale = [
             [size[0]/2, 0        , 0        ],
             [0        , size[1]/2, 0        ],
             [0        , 0        , size[2]/2]
         ]
-        VERTEX = np.array([
-            [-1, -1, -1],
-            [ 1, -1, -1],
-            [ 1, -1,  1],
-            [-1, -1,  1],
-            [-1,  1, -1],
-            [ 1,  1, -1],
+
+        vertices = np.array([
             [ 1,  1,  1],
-            [-1,  1,  1]
+            [ 1,  1, -1],
+            [-1,  1,  1],
+            [-1,  1, -1],
+            [-1, -1,  1],
+            [-1, -1, -1],
+            [ 1, -1,  1],
+            [ 1, -1, -1],
         ])
+        
+        indexes = []
+        # First 8 triangles follow triangle strip order.
+        for i in range(8):
+            if i % 2 == 0:
+                indexes.append([i%8, (i+1)%8, (i+2)%8])
+            else:
+                indexes.append([i%8, (i+2)%8, (i+1)%8])
+        # Final 2 faces are inputted manually
+        indexes.append([ 0, 2, 4])
+        indexes.append([ 0, 4, 6])
+        indexes.append([ 1, 3, 5])
+        indexes.append([ 1, 7, 5])
 
-        VERTEX = np.matmul(SCALE, VERTEX.T).T
 
-        INDEXES = [
-            1,0,2,2,0,3,
-            1,2,6,6,5,1,
-            2,3,7,7,6,2,
-            3,0,4,4,7,3,
-            0,1,5,5,4,0,
-            4,5,6,6,7,4
-        ]
-
-        # print(VERTEX)
-        points = [VERTEX[i] for i in INDEXES]    
+        vertices = np.matmul(scale, vertices.T).T
+        points = [vertices[i] for i in indexes]    
         points = np.array(points).flatten()
-        GL.triangleSet(points, colors)
+        vertices = np.array(prepare_points_3d(points, GL.transform_stack.peek(), GL.projection))
+
+        for tri in indexes:
+            # Get vertex coordinates
+            p0, p1, p2 = vertices[tri]          
+
+            # Random face colors, for debugging
+            if DEBUG_COLORS: r,g,b = np.random.randint(0,256, size=(3))
+
+            # Check every pixel in bounding box
+            bounding_box = get_bounding_box_pixels(p0,p1,p2)
+            for p in bounding_box:
+
+                # Screen check
+                if not in_screen(p): continue # p out of screen
+                
+                # Baricentric coordinates (dot product)
+                bari = construct_baricentric_coordinates(p, [p0,p1,p2])
+                # 0 to 1 means inside
+                if outside(bari[0]): continue
+                if outside(bari[1]): continue
+                if outside(bari[2]): continue
+                alpha, beta, gamma = bari
+                p.z = 1/(alpha/p0.z + beta/p1.z + gamma/p2.z) # Interpolate z coordinate with harmonic weighted mean
+
+                # Z-Buffer
+                gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["DEPTH"])
+                if gpu.GPU.read_pixel(p.get_flat_pixel(), gpu.GPU.DEPTH_COMPONENT32F) < p.z: continue # ja desenhamos coisas na frente
+                gpu.GPU.draw_pixel(p.get_flat_pixel(), gpu.GPU.DEPTH_COMPONENT32F, [p.z]) # novo ponto no buffer
+
+                # Bind draw buffer
+                gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["FRONT"])
+                if GL.SSAA != 1: gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["HIGHRES"]) # SSAA
+
+                # Colors
+                if not DEBUG_COLORS: r, g, b = get_emissive_rgb(colors)
+
+                # Transparency
+                prev = gpu.GPU.read_pixel(p.get_flat_pixel(), gpu.GPU.RGB8)
+                alpha = colors["transparency"]
+                prev = np.array(prev,dtype=np.float64)*alpha
+                curr = [r,g,b]
+                curr = np.array(curr,dtype=np.float64)*(1-alpha)
+                r,g,b = curr+prev
+                
+                # Draw
+                gpu.GPU.draw_pixel(p.get_flat_pixel(), gpu.GPU.RGB8, (r,g,b))  
+
+        gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["FRONT"])
 
     @staticmethod
     def indexedFaceSet(coord, coordIndex, colorPerVertex, color, colorIndex,
@@ -400,7 +483,7 @@ class GL:
         # print(norm_3d)
         # gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["DEPTH"])
         # print(gpu.GPU.get_frame_buffer())
-        outside = lambda n: n<0.0 or n>1.0 # Simple macro
+    
         if colorPerVertex:
             color = np.reshape(color, (-1, 3))
         curr_tri = deque(maxlen=3)
@@ -409,15 +492,16 @@ class GL:
                 curr_tri = deque(maxlen=3)
                 continue
             curr_tri.append(e)
-            if len(curr_tri) == 3:
+            if len(curr_tri) == 3: # Three points, draw triangle
                 a, b, c = curr_tri
                 p0, p1, p2 = norm_3d[a[0]], norm_3d[b[0]], norm_3d[c[0]]
                 if colorPerVertex: c0, c1, c2 = color[a[1]], color[b[1]], color[c[1]]
+                
+                # Random face colors for debugging
+                if DEBUG_COLORS: r,g,b = np.random.randint(0,256, size=(3))
 
                 # Bounding box optimization
                 bounding_box = get_bounding_box_pixels(p0,p1,p2)
-                in_screen = lambda pt2d: (pt2d.x>0 and pt2d.x<(GL.width*GL.SSAA) and pt2d.y>0 and pt2d.y<(GL.height*GL.SSAA)) # Frustum Culling
-
                 for p in bounding_box:
 
                     if not in_screen(p): continue # p out of screen
@@ -443,30 +527,33 @@ class GL:
                     if GL.SSAA != 1: gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["HIGHRES"]) # SSAA
 
                     # Drawing
-                    if not colorPerVertex: # Solid colors, just use emissive
-                        r, g, b = get_emissive_rgb(colors)
-                    else: # Draw color per vertex means we must interpolate with baricentric coordinates
-                        r, g, b = (alpha*c0*(1/p0.z) + beta*c1*(1/p1.z) + gamma*c2*(1/p2.z))*p.z # Compute weighted RGB by z
-                        # if p.get_flat_pixel()[1]<20:
-                        #     print("Ponto: ", p)
-                        #     print("Cores originais: ", c0, c1, c2)
-                        #     print("Cores interpoladas: ", r,g,b)
-                        # Convert to 0.255 int
-                        r = int(r * 255)
-                        g = int(g * 255)
-                        b = int(b * 255)
-                        # print(r,g,b)
-                    # After getting r,g,b compute transparency
-                    # prev = gpu.GPU.read_pixel(p.get_flat_pixel(), gpu.GPU.RGB8)
-                    # alpha = colors["transparency"]
-                    # prev = np.array(prev,dtype=np.float64)*alpha
-                    # curr = [r,g,b]
-                    # curr = np.array(curr,dtype=np.float64)*(1-alpha)
-                    # r,g,b = curr+prev
-                    # Draw after transparency
-                    gpu.GPU.draw_pixel(p.get_flat_pixel(), gpu.GPU.RGB8, (r,g,b))
+                    # Colors
+                    if not DEBUG_COLORS: 
+                        if not colorPerVertex: # Solid colors, just use emissive
+                            r, g, b = get_emissive_rgb(colors)
+                        else: # Draw color per vertex means we must interpolate with baricentric coordinates
+                            r, g, b = (alpha*c0*(1/p0.z) + beta*c1*(1/p1.z) + gamma*c2*(1/p2.z))*p.z # Compute weighted RGB by z
+                            # if p.get_flat_pixel()[1]<20:
+                            #     print("Ponto: ", p)
+                            #     print("Cores originais: ", c0, c1, c2)
+                            #     print("Cores interpoladas: ", r,g,b)
+                            # Convert to 0.255 int
+                            r = int(r * 255)
+                            g = int(g * 255)
+                            b = int(b * 255)
+                            # print(r,g,b)
+                    
+                    # Transparency
+                    prev = gpu.GPU.read_pixel(p.get_flat_pixel(), gpu.GPU.RGB8)
+                    alpha = colors["transparency"]
+                    prev = np.array(prev,dtype=np.float64)*alpha
+                    curr = [r,g,b]
+                    curr = np.array(curr,dtype=np.float64)*(1-alpha)
+                    r,g,b = curr+prev
+                    
+                    # Draw
+                    gpu.GPU.draw_pixel(p.get_flat_pixel(), gpu.GPU.RGB8, (r,g,b))  
         gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["FRONT"])
-        return
 
     @staticmethod
     def sphere(radius, colors):
@@ -480,6 +567,58 @@ class GL:
         # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
         print("Sphere : radius = {0}".format(radius)) # imprime no terminal o raio da esfera
         print("Sphere : colors = {0}".format(colors)) # imprime no terminal as cores
+
+        vertices, indexes = icosphere(3)
+
+        vertices = np.array(prepare_points_3d(vertices.flatten()*radius, GL.transform_stack.peek(), GL.projection))
+
+        for tri in indexes:
+            # Get vertex coordinates
+            p0, p1, p2 = vertices[tri]
+
+            # Random face colors, for debugging
+            if DEBUG_COLORS: r,g,b = np.random.randint(0,256, size=(3))
+
+            # Check every pixel in bounding box
+            bounding_box = get_bounding_box_pixels(p0,p1,p2)
+            for p in bounding_box:
+
+                # Screen check
+                if not in_screen(p): continue # p out of screen
+                
+                # Baricentric coordinates (dot product)
+                bari = construct_baricentric_coordinates(p, [p0,p1,p2])
+                # 0 to 1 means inside
+                if outside(bari[0]): continue
+                if outside(bari[1]): continue
+                if outside(bari[2]): continue
+                alpha, beta, gamma = bari
+                p.z = 1/(alpha/p0.z + beta/p1.z + gamma/p2.z) # Interpolate z coordinate with harmonic weighted mean
+
+                # Z-Buffer
+                gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["DEPTH"])
+                if gpu.GPU.read_pixel(p.get_flat_pixel(), gpu.GPU.DEPTH_COMPONENT32F) < p.z: continue # ja desenhamos coisas na frente
+                gpu.GPU.draw_pixel(p.get_flat_pixel(), gpu.GPU.DEPTH_COMPONENT32F, [p.z]) # novo ponto no buffer
+
+                # Bind draw buffer
+                gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["FRONT"])
+                if GL.SSAA != 1: gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["HIGHRES"]) # SSAA
+
+                # Colors
+                if not DEBUG_COLORS: r, g, b = get_emissive_rgb(colors)
+
+                # Transparency
+                prev = gpu.GPU.read_pixel(p.get_flat_pixel(), gpu.GPU.RGB8)
+                alpha = colors["transparency"]
+                prev = np.array(prev,dtype=np.float64)*alpha
+                curr = [r,g,b]
+                curr = np.array(curr,dtype=np.float64)*(1-alpha)
+                r,g,b = curr+prev
+                
+                # Draw
+                gpu.GPU.draw_pixel(p.get_flat_pixel(), gpu.GPU.RGB8, (r,g,b))
+
+        gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["FRONT"])
 
     @staticmethod
     def navigationInfo(headlight):
