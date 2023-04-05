@@ -359,7 +359,7 @@ def make_projection_matrix(near: float, far: float, fovd: float, w: int, h: int)
         [  
             [w/2.0, 0.0   , 0.0, w/2.0],
             [0.0  , -h/2.0, 0.0, h/2.0],
-            [0.0  , 0.0   , 1.0, 0.0  ],
+            [0.0  , 0.0   , 0.5, 0.5  ],
             [0.0  , 0.0   , 0.0, 1.0  ]
         ]
     )

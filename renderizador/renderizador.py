@@ -48,7 +48,7 @@ class Renderizador:
         # Define o atributo FRONT como o FrameBuffe principal
         self.framebuffers["FRONT"] = fbo[0]
         self.framebuffers["DEPTH"] = fbo[1]
-        self.framebuffers["HighRes"] = fbo[2]
+        self.framebuffers["HIGHRES"] = fbo[2]
 
         # Define que a posição criada será usada para desenho e leitura
         gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, self.framebuffers["FRONT"])
@@ -78,7 +78,7 @@ class Renderizador:
         )
 
         gpu.GPU.framebuffer_storage(
-            self.framebuffers["HighRes"],
+            self.framebuffers["HIGHRES"],
             gpu.GPU.COLOR_ATTACHMENT,
             gpu.GPU.RGB8,
             self.width * self.SSAA,
@@ -124,7 +124,7 @@ class Renderizador:
         # Função invocada após o processo de renderização terminar.
         ## Super Sampling Anti-Aliasing
         if self.SSAA != 1:
-            gpu.GPU.bind_framebuffer(gpu.GPU.READ_FRAMEBUFFER, self.framebuffers["HighRes"])
+            gpu.GPU.bind_framebuffer(gpu.GPU.READ_FRAMEBUFFER, self.framebuffers["HIGHRES"])
             gpu.GPU.bind_framebuffer(gpu.GPU.DRAW_FRAMEBUFFER, self.framebuffers["FRONT"])
             for i in range(0, self.width):
                 u = i * self.SSAA
