@@ -61,7 +61,7 @@ class Mipmap():
             axList[step].set_title("Mipmap level: {} ({}x{})".format(step, *self._map[step].shape[:2]))
         plt.show()
 
-    def get_texture(self, x: int, y: int, L: int = 0) -> List[np.uint8]:
+    def get_texture(self, u: int, v: int, L: int = 0) -> List[np.uint8]:
         """
         Returns RGB value at position x,y for a given Level of mipmap.
         """
@@ -70,13 +70,17 @@ class Mipmap():
         if L<0                    : L = 0
         
         # Re-indexing to new size
-        i, j = x//(2**L), y//(2**L)
+        new_shape = self._map[L].shape
+        j = int(u*new_shape[0])
+        i = new_shape[1] - int(v*new_shape[1]) - 1
+        
         # Debug printing
         if DEBUG_INFO: 
             print("Getting Mipmap texture at position ({},{}), for level {}.".format(i, j, L))
             t = self._map[L][i, j].copy()
             self._map[L][i, j] = [255,255,255]
             return t
+        
         return self._map[L][i, j]
 
 if __name__ == "__main__":
@@ -90,5 +94,5 @@ if __name__ == "__main__":
     m = Mipmap(image)
     print("Testing gets:")
     for i in range(9):
-        print(m.get_texture(50,50, i))
+        print(m.get_texture(0.2, 0.2, i))
     m.plot()

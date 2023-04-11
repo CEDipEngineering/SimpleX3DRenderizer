@@ -23,7 +23,7 @@ from TransformStack import TransformStack # Pilha de transforms
 from Mipmap import Mipmap # Implementacao de mipmap
 from icosphere import icosphere # Ver icosphere.py
 
-DEBUG_COLORS = True
+DEBUG_COLORS = False
 
 ## lambdas
 outside = lambda n: n<0.0 or n>1.0 # Triangle interior check
@@ -457,25 +457,10 @@ class GL:
         # textura para o poligono, para isso, use as coordenadas de textura e depois aplique a
         # cor da textura conforme a posição do mapeamento. Dentro da classe GPU já está
         # implementadado um método para a leitura de imagens.
-
-        # Os prints abaixo são só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
-        # print("IndexedFaceSet : ")
-        # if coord:
-        #     print("\tpontos(x, y, z) = {0}, coordIndex = {1}".format(coord, coordIndex))
-        # print("colorPerVertex = {0}".format(colorPerVertex))
-        # if colorPerVertex and color and colorIndex:
-        #     print("\tcores(r, g, b) = {0}, colorIndex = {1}".format(color, colorIndex))
-        # if texCoord and texCoordIndex:
-        #     print("\tpontos(u, v) = {0}, texCoordIndex = {1}".format(texCoord, texCoordIndex))
-        # if current_texture:
-        #     image = gpu.GPU.load_texture(current_texture[0])
-        #     print("\t Matriz com image = {0}".format(image))
-        #     print("\t Dimensões da image = {0}".format(image.shape))
-        # print("IndexedFaceSet : colors = {0}".format(colors))  # imprime no terminal as cores
         
         if texCoord and texCoordIndex and current_texture:
             mipmap = Mipmap(gpu.GPU.load_texture(current_texture[0]))
-            return
+            texCoord = np.reshape(texCoord, (-1, 2))
 
         if color is None: colorPerVertex = False # X3D is pretty stupid
 
@@ -487,7 +472,8 @@ class GL:
         if colorPerVertex:
             color = np.reshape(color, (-1, 3))
         curr_tri = deque(maxlen=3)
-        for i, e in enumerate(zip_longest(coordIndex, colorIndex)):
+        
+        for e in zip_longest(coordIndex, colorIndex, texCoordIndex):
             if e[0] == -1:
                 curr_tri = deque(maxlen=3)
                 continue
@@ -496,6 +482,7 @@ class GL:
                 a, b, c = curr_tri
                 p0, p1, p2 = norm_3d[a[0]], norm_3d[b[0]], norm_3d[c[0]]
                 if colorPerVertex: c0, c1, c2 = color[a[1]], color[b[1]], color[c[1]]
+                if current_texture: t0, t1, t2 = texCoord[a[2]], texCoord[b[2]], texCoord[c[2]]
                 
                 # Random face colors for debugging
                 if DEBUG_COLORS: r,g,b = np.random.randint(0,256, size=(3))
@@ -529,9 +516,7 @@ class GL:
                     # Drawing
                     # Colors
                     if not DEBUG_COLORS: 
-                        if not colorPerVertex: # Solid colors, just use emissive
-                            r, g, b = get_emissive_rgb(colors)
-                        else: # Draw color per vertex means we must interpolate with baricentric coordinates
+                        if colorPerVertex: # Solid colors, just use emissive
                             r, g, b = (alpha*c0*(1/p0.z) + beta*c1*(1/p1.z) + gamma*c2*(1/p2.z))*p.z # Compute weighted RGB by z
                             # if p.get_flat_pixel()[1]<20:
                             #     print("Ponto: ", p)
@@ -542,6 +527,15 @@ class GL:
                             g = int(g * 255)
                             b = int(b * 255)
                             # print(r,g,b)
+                        elif current_texture:
+                            t0, t1, t2 # Each is (u,v) of texture for one vertex.
+                            u, v = (alpha*t0*(1/p0.z) + beta*t1*(1/p1.z) + gamma*t2*(1/p2.z))*p.z
+                            # TODO: Calculate L later
+                            L = 0
+                            r, g, b, a = mipmap.get_texture(u, v, L)
+
+                        else: # Draw color per vertex means we must interpolate with baricentric coordinates
+                            r, g, b = get_emissive_rgb(colors)
                     
                     # Transparency
                     prev = gpu.GPU.read_pixel(p.get_flat_pixel(), gpu.GPU.RGB8)
