@@ -106,7 +106,7 @@ class GPU:
                 dtype = np.float32
                 depth = 1
             # Aloca espaço definindo todos os valores como 1 (profundidade máxima)
-            GPU.frame_buffer[position].depth = np.ones((height, width, depth), dtype=dtype)
+            GPU.frame_buffer[position].depth = np.ones((height, width, depth), dtype=dtype)*np.inf
 
     @staticmethod
     def clear_color(color):

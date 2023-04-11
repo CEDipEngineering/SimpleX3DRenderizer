@@ -465,7 +465,8 @@ class GL:
         if color is None: colorPerVertex = False # X3D is pretty stupid
 
         norm_3d = prepare_points_3d(coord, GL.transform_stack.peek(), GL.projection)
-        # print(norm_3d)
+        # print("in: \n", coord)
+        # print("transformed: \n", norm_3d)
         # gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["DEPTH"])
         # print(gpu.GPU.get_frame_buffer())
     
@@ -500,6 +501,7 @@ class GL:
                     if outside(bari[1]): continue
                     if outside(bari[2]): continue
                     alpha, beta, gamma = bari
+                    print(bari)
                     p.z = 1/(alpha/p0.z + beta/p1.z + gamma/p2.z) # Interpolate z coordinate with harmonic weighted mean
 
                     # Z-Buffer

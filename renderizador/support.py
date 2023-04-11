@@ -114,7 +114,7 @@ class CustomPoint3D():
         "Transforms inplace, but also returns self, just in case its used mid-operation"
         self.x /= self.w
         self.y /= self.w
-        self.z /= self.w
+        # self.z /= self.w
         self.w /= self.w
         return self
 
@@ -424,8 +424,10 @@ def prepare_points_3d(points: np.array, model: np.array, view: np.array) -> np.a
     arr.append(homo)
     arr = np.array(arr)  
     t = np.matmul(model, arr)
+    print("Transformed: \n", t)
     # if PRINT_TRANSFORMS: print("Points NDC:\n{}".format(t))
     p = np.matmul(view, t)
+    print("Projected: \n", p)
     return normalize_3d(p)
 
 
