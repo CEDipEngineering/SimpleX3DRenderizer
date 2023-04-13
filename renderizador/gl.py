@@ -23,12 +23,7 @@ from TransformStack import TransformStack # Pilha de transforms
 from Mipmap import Mipmap # Implementacao de mipmap
 from icosphere import icosphere # Ver icosphere.py
 
-DEBUG_COLORS = False
-
-## lambdas
-outside = lambda n: n<0.0 or n>1.0 # Triangle interior check
-in_screen = lambda pt2d: (pt2d.x>0 and pt2d.x<(GL.width*GL.SSAA) and pt2d.y>0 and pt2d.y<(GL.height*GL.SSAA)) # Frustum Culling
-
+DEBUG_COLORS = True
 
 class GL:
     """Classe que representa a biblioteca gráfica (Graphics Library)."""
@@ -39,6 +34,10 @@ class GL:
     far = 1000    # plano de corte distante
     transform_stack = TransformStack()
     projection = transform_stack.peek()
+
+    ## lambdas
+    outside = lambda n: n<0.0 or n>1.0 # Triangle interior check
+    in_screen = lambda pt2d: (pt2d.x>0 and pt2d.x<(GL.width*GL.SSAA) and pt2d.y>0 and pt2d.y<(GL.height*GL.SSAA)) # Frustum Culling
 
     @staticmethod
     def setup(width, height, near=0.01, far=1000, SSAA=1, renderer=None):
@@ -115,9 +114,9 @@ class GL:
         if GL.SSAA != 1: gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["HIGHRES"]) # SSAA
         while len(respoints) != 0:
             a, b, c = respoints.popleft(), respoints.popleft(), respoints.popleft()
-            if not in_screen(a): continue
-            if not in_screen(b): continue
-            if not in_screen(c): continue
+            if not GL.in_screen(a): continue
+            if not GL.in_screen(b): continue
+            if not GL.in_screen(c): continue
             # print(a,b,c)
             tri = draw_triangle(a,b,c)
             for p in tri:
@@ -156,12 +155,14 @@ class GL:
             drawList = []
             for p in bounding_box:
                 
+                if not GL.in_screen(p): continue # p out of screen
+
                 # Baricentric coordinates (dot product)
                 bari = construct_baricentric_coordinates(p, [p0,p1,p2])
                 # 0 to 1 means inside
-                if outside(bari[0]): continue
-                if outside(bari[1]): continue
-                if outside(bari[2]): continue
+                if GL.outside(bari[0]): continue
+                if GL.outside(bari[1]): continue
+                if GL.outside(bari[2]): continue
                 alpha, beta, gamma = bari
 
                 # Z-Buffer
@@ -358,39 +359,36 @@ class GL:
         ]
 
         vertices = np.array([
-            [ 1,  1,  1],
-            [ 1,  1, -1],
-            [-1,  1,  1],
-            [-1,  1, -1],
-            [-1, -1,  1],
-            [-1, -1, -1],
-            [ 1, -1,  1],
-            [ 1, -1, -1],
+            [-1, -1, -1], # 0
+            [ 1, -1, -1], # 1
+            [-1, -1,  1], # 2
+            [ 1, -1,  1], # 3
+            [-1,  1, -1], # 4
+            [ 1,  1, -1], # 5
+            [-1,  1,  1], # 6
+            [ 1,  1,  1], # 7
         ])
-        
-        indexes = []
-        # First 8 triangles follow triangle strip order.
-        for i in range(8):
-            if i % 2 == 0:
-                indexes.append([i%8, (i+1)%8, (i+2)%8])
-            else:
-                indexes.append([i%8, (i+2)%8, (i+1)%8])
-        # Final 2 faces are inputted manually
-        indexes.append([ 0, 2, 4])
-        indexes.append([ 0, 4, 6])
-        indexes.append([ 1, 3, 5])
-        indexes.append([ 1, 7, 5])
+
+
+        indexes = np.array([
+            [ 0, 3, 1], [ 0, 2, 3], # Bottom Face
+            [ 4, 5, 7], [ 4, 7, 6], # Top Face
+            [ 1, 3, 7], [ 1, 7, 5], # +x Face
+            [ 0, 4, 6], [ 0, 6, 2], # -x Face
+            [ 2, 6, 7], [ 2, 7, 3], # -z Face
+            [ 0, 1, 5], [ 0, 5, 4], # +z Face
+        ])
+
 
 
         vertices = np.matmul(scale, vertices.T).T
-        points = [vertices[i] for i in indexes]    
+        points = np.array([vertices[i] for i in indexes])
         points = np.array(points).flatten()
-        vertices = np.array(prepare_points_3d(points, GL.transform_stack.peek(), GL.projection))
-
-        for tri in indexes:
+        points = np.array(prepare_points_3d(points, GL.transform_stack.peek(), GL.projection))
+        tris = np.reshape(points, (-1, 3))
+        for tri in tris:
             # Get vertex coordinates
-            p0, p1, p2 = vertices[tri]          
-
+            p0, p1, p2 = tri          
             # Random face colors, for debugging
             if DEBUG_COLORS: r,g,b = np.random.randint(0,256, size=(3))
 
@@ -399,14 +397,14 @@ class GL:
             for p in bounding_box:
 
                 # Screen check
-                if not in_screen(p): continue # p out of screen
+                if not GL.in_screen(p): continue # p out of screen
                 
                 # Baricentric coordinates (dot product)
                 bari = construct_baricentric_coordinates(p, [p0,p1,p2])
                 # 0 to 1 means inside
-                if outside(bari[0]): continue
-                if outside(bari[1]): continue
-                if outside(bari[2]): continue
+                if GL.outside(bari[0]): continue
+                if GL.outside(bari[1]): continue
+                if GL.outside(bari[2]): continue
                 alpha, beta, gamma = bari
                 p.z = 1/(alpha/p0.z + beta/p1.z + gamma/p2.z) # Interpolate z coordinate with harmonic weighted mean
 
@@ -418,10 +416,11 @@ class GL:
                 # Bind draw buffer
                 gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["FRONT"])
                 if GL.SSAA != 1: gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["HIGHRES"]) # SSAA
-
+                
                 # Colors
                 if not DEBUG_COLORS: r, g, b = get_emissive_rgb(colors)
-
+                
+                
                 # Transparency
                 prev = gpu.GPU.read_pixel(p.get_flat_pixel(), gpu.GPU.RGB8)
                 alpha = colors["transparency"]
@@ -492,22 +491,19 @@ class GL:
                 bounding_box = get_bounding_box_pixels(p0,p1,p2)
                 for p in bounding_box:
 
-                    if not in_screen(p): continue # p out of screen
+                    if not GL.in_screen(p): continue # p out of screen
                     
                     # Baricentric coordinates (dot product)
                     bari = construct_baricentric_coordinates(p, [p0,p1,p2])
                     # 0 to 1 means inside
-                    if outside(bari[0]): continue
-                    if outside(bari[1]): continue
-                    if outside(bari[2]): continue
+                    if GL.outside(bari[0]): continue
+                    if GL.outside(bari[1]): continue
+                    if GL.outside(bari[2]): continue
                     alpha, beta, gamma = bari
-                    print(bari)
                     p.z = 1/(alpha/p0.z + beta/p1.z + gamma/p2.z) # Interpolate z coordinate with harmonic weighted mean
 
                     # Z-Buffer
-                    # print("bbox p: {}".format(p))
                     gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, GL.renderer.framebuffers["DEPTH"])
-                    # if p.z != 0: print(p.z)
                     if gpu.GPU.read_pixel(p.get_flat_pixel(), gpu.GPU.DEPTH_COMPONENT32F) < p.z: continue # ja desenhamos coisas na frente
                     gpu.GPU.draw_pixel(p.get_flat_pixel(), gpu.GPU.DEPTH_COMPONENT32F, [p.z]) # novo ponto no buffer
 
@@ -580,14 +576,14 @@ class GL:
             for p in bounding_box:
 
                 # Screen check
-                if not in_screen(p): continue # p out of screen
+                if not GL.in_screen(p): continue # p out of screen
                 
                 # Baricentric coordinates (dot product)
                 bari = construct_baricentric_coordinates(p, [p0,p1,p2])
                 # 0 to 1 means inside
-                if outside(bari[0]): continue
-                if outside(bari[1]): continue
-                if outside(bari[2]): continue
+                if GL.outside(bari[0]): continue
+                if GL.outside(bari[1]): continue
+                if GL.outside(bari[2]): continue
                 alpha, beta, gamma = bari
                 p.z = 1/(alpha/p0.z + beta/p1.z + gamma/p2.z) # Interpolate z coordinate with harmonic weighted mean
 
