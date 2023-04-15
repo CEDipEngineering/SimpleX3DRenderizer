@@ -50,14 +50,23 @@ class CustomPoint2D():
         return self.__str__()
     
 class CustomPoint3D():
-    def __init__(self, x, y, z, w=1, alpha=0.3, beta=0.3, gamma=0.3) -> None:
+    def __init__(self, x, y, z, w=1, alpha=0.3, beta=0.3, gamma=0.3, c=np.array([0.,0.,0.]), t=np.array([0.,0.])) -> None:
+        # Homogeneous Coordinates
         self.x = x
         self.y = y
         self.z = z
         self.w = w
+
+        # Baricentric coordinates
         self.alpha = alpha
         self.beta = beta
         self.gamma = gamma
+
+        # Color (array, 0:1, float, rgb)
+        self.c = c
+
+        # Texture mapping (array, 0:1, float, uv)
+        self.t = t
 
     def __sub__(self, other):
         if other is CustomPoint3D:
@@ -118,7 +127,11 @@ class CustomPoint3D():
         self.w /= self.w
         return self
 
-    # Methods for debug printing255
+    def outside(self):
+        outside = lambda n: n<0.0 or n>1.0 # Triangle interior check
+        return outside(self.alpha) or outside(self.beta) or outside(self.gamma)
+
+    # Methods for debug printing
     def __str__(self) -> str:
         return "P3D:({},{},{},{})".format(self.x, self.y, self.z, self.w)
     
@@ -220,8 +233,10 @@ def draw_line(p0: CustomPoint2D, p1: CustomPoint2D) -> List[CustomPoint2D]:
 
 def get_bounding_box_pixels(*args: List[CustomPoint2D]) -> List[CustomPoint3D]:
     """
+    DEPRACATED!! USE GL.tri_bounding_box INSTEAD!!
     Given a polygon (list of points), determine the bounding box of said polygon, then return a list of every pixel in said box. 
     """
+    print("Warning! Using deprecated function, use GL.tri_bounding_box instead.")
     l = [(p.x, p.y) for p in args]
     x_max = max([math.ceil(p[0]) for p in l])
     x_min = min([math.floor(p[0]) for p in l])
