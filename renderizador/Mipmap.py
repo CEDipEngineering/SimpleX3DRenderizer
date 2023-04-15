@@ -1,6 +1,7 @@
 import numpy as np
 from matplotlib import pyplot as plt
 from typing import List
+from support import CustomPoint3D
 
 # Enable printing and plotting debug info
 DEBUG_INFO = False
@@ -75,6 +76,24 @@ class Mipmap():
         j = int(u*new_shape[0])
         i = new_shape[1] - int(v*new_shape[1]) - 1
         return i, j
+
+    def calculate_L(self, curr_point: CustomPoint3D, right: CustomPoint3D, up: CustomPoint3D) -> int:
+        
+        x0, y0 = self.get_pixel_pos(*curr_point.t)
+        x1, y1 = self.get_pixel_pos(*right.t)
+        x2, y2 = self.get_pixel_pos(*up.t)
+
+        dudx = x1-x0
+        dudy = x2-x0
+        dvdx = y1-y0
+        dvdy = y2-y0
+
+        L = max(
+            np.sqrt(dudx**2 + dvdx**2),
+            np.sqrt(dudy**2 + dvdy**2)
+        )  
+        
+        return round(np.log2(L), 0) - 1
 
     def get_texture(self, u: float, v: float, L: int = 0) -> List[np.uint8]:
         """

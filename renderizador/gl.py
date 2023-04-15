@@ -56,10 +56,10 @@ class GL:
         Given a triangle (list of 3 points), determine the bounding box of said triangle, 
         then return a matrix of pixels in said box, already interpolated using baricentric coordinates. 
         """
-        x_max = max([math.ceil(p[0])  for p in args])
-        x_min = min([math.floor(p[0]) for p in args])
-        y_max = max([math.ceil(p[1])  for p in args])
-        y_min = min([math.floor(p[1]) for p in args])
+        x_max = max([math.ceil(p[0])  for p in args])+1
+        x_min = min([math.floor(p[0]) for p in args])-1
+        y_max = max([math.ceil(p[1])  for p in args])+1
+        y_min = min([math.floor(p[1]) for p in args])-1
         out = []
         p0, p1, p2 = args
         for x in range(x_min, x_max+1):
@@ -92,7 +92,7 @@ class GL:
         
         """
         if current_texture:
-            mipmap = Mipmap(gpu.GPU.load_texture(current_texture[0]))
+            mipmap = Mipmap(gpu.GPU.load_texture(current_texture[0]), maxLevel=3)
 
         for tri in tris:
             # Unpack vertices
@@ -131,10 +131,24 @@ class GL:
                             g = int(g * 255)
                             b = int(b * 255)
                         elif current_texture:
-                            u, v = (p.alpha*p0.t*(1/p0.z) + p.beta*p1.t*(1/p1.z) + p.gamma*p2.t*(1/p2.z))*p.z
-                            # TODO: Calculate L later
-                            L = 0
-                            r, g, b, a = mipmap.get_texture(u, v, L)
+                            # Interpolate u, v
+                            p.t = (p.alpha*p0.t*(1/p0.z) + p.beta*p1.t*(1/p1.z) + p.gamma*p2.t*(1/p2.z))*p.z
+                            
+                            # print(f"{i=};{j=};{bounding_box.shape=}")
+
+                            if i+1 >= w:
+                                L = 0
+                            else:
+                                p_right = bounding_box[i + 1, j]
+                                p_right.t = (p_right.alpha*p0.t*(1/p0.z) + p_right.beta*p1.t*(1/p1.z) + p_right.gamma*p2.t*(1/p2.z))*p.z
+                                if j+1 >= h:
+                                    L = 0
+                                else:
+                                    p_up    = bounding_box[i, j + 1]
+                                    p_up.t = (p_up.alpha*p0.t*(1/p0.z) + p_up.beta*p1.t*(1/p1.z) + p_up.gamma*p2.t*(1/p2.z))*p.z
+                                    L = mipmap.calculate_L(p, p_right, p_up)
+                            
+                            r, g, b, a = mipmap.get_texture(*p.t, L)
 
                         else: # Draw color per vertex means we must interpolate with baricentric coordinates
                             r, g, b = get_emissive_rgb(colors)
