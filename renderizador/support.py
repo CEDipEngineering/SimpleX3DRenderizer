@@ -18,12 +18,12 @@ class CustomPoint2D():
         return (self.r, self.g, self.b)
 
     def __sub__(self, other):
-        if other is CustomPoint2D:
+        if type(other) is CustomPoint2D:
             return CustomPoint2D(self.x-other.x, self.y-other.y)
         raise TypeError("CustomPoint2D only supports operations with other CustomPoint2D obejcts.")
     
     def __add__(self, other):
-        if other is CustomPoint2D:
+        if type(other) is CustomPoint2D:
             return CustomPoint2D(self.x+other.x, self.y+other.y)
         raise TypeError("CustomPoint2D only supports operations with other CustomPoint2D obejcts.")
     
@@ -41,7 +41,6 @@ class CustomPoint2D():
             self.y = v
         raise IndexError("Invalid index passed, must be 0,1 to access x,y coordinates.")
   
-
     # Methods for debug printing
     def __str__(self) -> str:
         return "({:.1f},{:.1f})".format(self.x, self.y)
@@ -50,7 +49,7 @@ class CustomPoint2D():
         return self.__str__()
     
 class CustomPoint3D():
-    def __init__(self, x, y, z, w=1, alpha=0.3, beta=0.3, gamma=0.3, c=np.array([0.,0.,0.]), t=np.array([0.,0.])) -> None:
+    def __init__(self, x, y, z, w=1, alpha=0.3, beta=0.3, gamma=0.3, c=np.array([0.,0.,0.]), t=np.array([0.,0.]), n = np.array([0., 0., 1.])) -> None:
         # Homogeneous Coordinates
         self.x = x
         self.y = y
@@ -68,9 +67,17 @@ class CustomPoint3D():
         # Texture mapping (array, 0:1, float, uv)
         self.t = t
 
+        # Normal
+        self.n = n
+
     def __sub__(self, other):
-        if other is CustomPoint3D:
+        if type(other) is CustomPoint3D:
             return CustomPoint3D(self.x-other.x, self.y-other.y, self.z-other.z)
+        raise TypeError("CustomPoint3D only supports operations with other CustomPoint3D obejcts.")
+    
+    def __rsub__(self, other):
+        if type(other) is CustomPoint3D:
+            return CustomPoint3D(other.x-self.x, other.y-self.y, other.z-self.z)
         raise TypeError("CustomPoint3D only supports operations with other CustomPoint3D obejcts.")
     
     def __add__(self, other):
@@ -130,6 +137,16 @@ class CustomPoint3D():
     def outside(self):
         outside = lambda n: n<0.0 or n>1.0 # Triangle interior check
         return outside(self.alpha) or outside(self.beta) or outside(self.gamma)
+
+    def normalize(self):
+        norm = np.linalg.norm([self.x, self.y, self.z])
+        self.x /= norm
+        self.y /= norm
+        self.z /= norm
+        return self
+
+    def to_array(self):
+        return np.array([self.x, self.y, self.z])
 
     # Methods for debug printing
     def __str__(self) -> str:

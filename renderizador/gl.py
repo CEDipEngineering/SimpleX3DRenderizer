@@ -22,6 +22,7 @@ from support import * # Implementacoes individuais
 from TransformStack import TransformStack # Pilha de transforms
 from Mipmap import Mipmap # Implementacao de mipmap
 from icosphere import icosphere # Ver icosphere.py
+from Light import Light, DirectionalLight # Implementacao das fontes de luz
 
 DEBUG_COLORS = False
 ENABLE_TRANSPARENCY = True
@@ -35,6 +36,7 @@ class GL:
     far = 1000    # plano de corte distante
     transform_stack = TransformStack()
     projection = transform_stack.peek()
+    lights : List[Light] = []
 
     ## lambdas
     outside = lambda n: n<0.0 or n>1.0 # Triangle interior check
@@ -77,7 +79,7 @@ class GL:
         return np.reshape(np.array(out), ((y_max - y_min)+1 , (x_max - x_min)+1))
 
     @staticmethod
-    def draw_triangles(tris: List[List[CustomPoint3D]], colors: dict, colorPerVertex: bool = False, current_texture = None):
+    def draw_triangles(tris: List[List[CustomPoint3D]], colors: dict, colorPerVertex: bool = False, current_texture = None, lighting=None):
         """
         Generalized method for drawing triangles.
 
@@ -93,6 +95,9 @@ class GL:
         """
         if current_texture:
             mipmap = Mipmap(gpu.GPU.load_texture(current_texture[0]), maxLevel=3)
+
+        if lighting:
+            print("\n".join(map(str, GL.lights)))
 
         for tri in tris:
             # Unpack vertices
@@ -149,10 +154,48 @@ class GL:
                                     L = mipmap.calculate_L(p, p_right, p_up)
                             
                             r, g, b, a = mipmap.get_texture(*p.t, L)
+                        elif lighting:
+                            world_x = 1/(p.alpha/p0.x + p.beta/p1.x + p.gamma/p2.x) # Interpolate x coordinate with harmonic weighted mean
+                            world_y = 1/(p.alpha/p0.y + p.beta/p1.y + p.gamma/p2.y) # Interpolate y coordinate with harmonic weighted mean
+                            look_direction = (np.array([world_x, world_y, p.z]) - GL.camera_position)
+                            look_direction = look_direction * 1./np.linalg.norm(look_direction)                         
+                            
+                            emissive_color  = np.float64(colors["emissiveColor"])
+                            specular_color  = np.float64(colors["specularColor"])
+                            diffuse_color   = np.float64(colors["diffuseColor"])
+                            shininess       = np.float64(colors["shininess"])
+                            
+                            if lighting.lower() == "face":
+                                p.n = p0.n
+                            elif lighting.lower() == "interpolate":
+                                bari = construct_baricentric_coordinates(p, [p0.n, p1.n, p2.n]) 
+                                p.n = (bari[0]*p0.n*(1/p0.z) + bari[1]*p1.n*(1/p1.z) + bari[2]*p2.n*(1/p2.z))*p.z
+                            else:
+                                print("WARNING: lighting was specified, however {} is not a valid type, use 'Face' or 'Interpolate'".format(lighting))
+
+                            light_color_effect = [0., 0., 0.] # Black RGB
+                            for light in GL.lights:
+                                # Extract light parameters
+                                ambient_intensity = light.ambientIntensity + 0.1
+                                intensity = light.intensity
+                                light_color = light.color
+                                direction = light.direction
+
+                                # Calculate Look direction vector combined with normal
+                                Lv = (look_direction+direction)
+                                Lv = Lv * 1./np.linalg.norm(Lv)
+
+                                ambient_factor = diffuse_color*ambient_intensity
+                                diffuse_factor = diffuse_color*max(0, np.dot(p.n, direction))*intensity
+                                specular_factor = specular_color*max(0, np.dot(p.n, (Lv)**(shininess*128.0)))*intensity
+
+                                light_color_effect += light_color * (ambient_factor + diffuse_factor + specular_factor)
+                            # print(light_color)
+                            r, g, b = np.uint8(255.0 * (light_color_effect + emissive_color))
 
                         else: # Draw color per vertex means we must interpolate with baricentric coordinates
                             r, g, b = get_emissive_rgb(colors)
-
+                
                     # Transparency
                     if ENABLE_TRANSPARENCY:
                         prev = gpu.GPU.read_pixel(p.get_flat_pixel(), gpu.GPU.RGB8)
@@ -161,7 +204,7 @@ class GL:
                         curr = [r,g,b]
                         curr = np.array(curr,dtype=np.float64)*(1-alpha)
                         r,g,b = curr+prev
-            
+
                     # Draw
                     gpu.GPU.draw_pixel(p.get_flat_pixel(), gpu.GPU.RGB8, (r,g,b))            
 
@@ -264,7 +307,16 @@ class GL:
 
         norm_3d = prepare_points_3d(point, GL.transform_stack.peek(), GL.projection)        
         tris = np.reshape(np.array(norm_3d), (-1, 3))
-        GL.draw_triangles(tris, colors)
+
+        for tri in tris:
+            p0, p1, p2 = tri
+            normal = np.cross((p1-p0).to_array(), (p2-p0).to_array())
+            normal = normal * 1./np.linalg.norm(normal)
+            p0.n = normal
+            p1.n = normal
+            p2.n = normal
+
+        GL.draw_triangles(tris, colors, lighting="face")
         
     @staticmethod
     def viewpoint(position, orientation, fieldOfView):
@@ -278,7 +330,8 @@ class GL:
         # print("position = {0} ".format(position), end='')
         # print("orientation = {0} ".format(orientation), end='')
         # print("fieldOfView = {0} ".format(fieldOfView))
-        camera = look_at(CustomPoint3D(position[0], position[1], position[2]), CustomPoint3D(*orientation[:3]), orientation[-1])
+        GL.camera_position = np.array([position[0], position[1], position[2]])
+        camera = look_at(CustomPoint3D(*GL.camera_position), CustomPoint3D(*orientation[:3]), orientation[-1])
         # print("lookat:\n",camera)
         project = make_projection_matrix(near=GL.near, far=GL.far, fovd=fieldOfView, w=GL.width*GL.SSAA, h=GL.height*GL.SSAA)
         # print(project)
@@ -393,22 +446,15 @@ class GL:
     @staticmethod
     def box(size, colors):
         """Função usada para renderizar Boxes."""
-        # A função box é usada para desenhar paralelepípedos na cena. O Box é centrada no
-        # (0, 0, 0) no sistema de coordenadas local e alinhado com os eixos de coordenadas
-        # locais. O argumento size especifica as extensões da caixa ao longo dos eixos X, Y
-        # e Z, respectivamente, e cada valor do tamanho deve ser maior que zero. Para desenha
-        # essa caixa você vai provavelmente querer tesselar ela em triângulos, para isso
-        # encontre os vértices e defina os triângulos.
 
-        # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
-        # print("Box : size = {0}".format(size)) # imprime no terminal pontos
-        # print("Box : colors = {0}".format(colors)) # imprime no terminal as cores
+        # Apply scale matrix
         scale = [
             [size[0]/2, 0        , 0        ],
             [0        , size[1]/2, 0        ],
             [0        , 0        , size[2]/2]
         ]
 
+        # Vertices are hardcoded, since box is always centered at origin
         vertices = np.array([
             [-1, -1, -1], # 0
             [ 1, -1, -1], # 1
@@ -420,7 +466,7 @@ class GL:
             [ 1,  1,  1], # 7
         ])
 
-
+        # Indexes for each of the twelve triangles
         indexes = np.array([
             [ 0, 3, 1], [ 0, 2, 3], # Bottom Face
             [ 4, 5, 7], [ 4, 7, 6], # Top Face
@@ -430,6 +476,14 @@ class GL:
             [ 0, 1, 5], [ 0, 5, 4], # +z Face
         ])
 
+        normals = np.array([    
+            [  0, -1,  0], [  0, -1,  0], # Bottom Face
+            [  0,  1,  0], [  0,  1,  0], # Top Face
+            [  1,  0,  0], [  1,  0,  0], # +x Face
+            [ -1,  0,  0], [ -1,  0,  0], # -x Face
+            [  0,  0,  1], [  0,  0,  1], # +z Face
+            [  0,  0, -1], [  0,  0, -1], # -z Face
+        ])
 
         # Identify all triangles
         vertices = np.matmul(scale, vertices.T).T
@@ -437,6 +491,10 @@ class GL:
         points = np.array(points).flatten()
         points = np.array(prepare_points_3d(points, GL.transform_stack.peek(), GL.projection))
         tris = np.reshape(points, (-1, 3))
+
+        for tri, normal in zip(tris, normals):
+            for p in tri:
+                p.n = normal
 
         # Draw
         GL.draw_triangles(tris, colors)
@@ -530,6 +588,13 @@ class GL:
 
         # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
         # print("NavigationInfo : headlight = {0}".format(headlight)) # imprime no terminal
+        if headlight:
+            GL.lights.append(DirectionalLight(
+                ambientIntensity=0.,
+                color=[1., 1., 1.],
+                intensity=1.,
+                direction=[0., 0., -1]
+            ))
 
     @staticmethod
     def directionalLight(ambientIntensity, color, intensity, direction):
@@ -545,6 +610,14 @@ class GL:
         print("DirectionalLight : color = {0}".format(color)) # imprime no terminal
         print("DirectionalLight : intensity = {0}".format(intensity)) # imprime no terminal
         print("DirectionalLight : direction = {0}".format(direction)) # imprime no terminal
+        light = DirectionalLight(
+            ambientIntensity,
+            color,
+            intensity,
+            direction
+        )
+
+        GL.lights.append(light)
 
     @staticmethod
     def pointLight(ambientIntensity, color, intensity, location):
