@@ -91,13 +91,19 @@ class GL:
         - colors must be a dict, as supplied by X3D specs.
         - colorPerVertex indicates whether to interpolate colors from each vertex. Points must have attribute c specified.
         - currentTexture indicates the texture being mapped to the surface. Points must have attribute t specified.
-        
+        - lighting must be either 'face' or 'interpolate' to indicate whether surface normals used for shading will be considered per face or vertex.
         """
         if current_texture:
             mipmap = Mipmap(gpu.GPU.load_texture(current_texture[0]), maxLevel=3)
 
-        if lighting:
-            print("\n".join(map(str, GL.lights)))
+        emissive_color  = np.float64(colors["emissiveColor"])
+        specular_color  = np.float64(colors["specularColor"])
+        diffuse_color   = np.float64(colors["diffuseColor"])
+        shininess       = np.float64(colors["shininess"])
+
+
+        # if lighting:
+        #     print("\n".join(map(str, GL.lights)))
 
         for tri in tris:
             # Unpack vertices
@@ -157,26 +163,22 @@ class GL:
                         elif lighting:
                             world_x = 1/(p.alpha/p0.x + p.beta/p1.x + p.gamma/p2.x) # Interpolate x coordinate with harmonic weighted mean
                             world_y = 1/(p.alpha/p0.y + p.beta/p1.y + p.gamma/p2.y) # Interpolate y coordinate with harmonic weighted mean
-                            look_direction = (np.array([world_x, world_y, p.z]) - GL.camera_position)
+                            look_direction = GL.camera_position - np.array([world_x, world_y, p.z])
                             look_direction = look_direction * 1./np.linalg.norm(look_direction)                         
-                            
-                            emissive_color  = np.float64(colors["emissiveColor"])
-                            specular_color  = np.float64(colors["specularColor"])
-                            diffuse_color   = np.float64(colors["diffuseColor"])
-                            shininess       = np.float64(colors["shininess"])
                             
                             if lighting.lower() == "face":
                                 p.n = p0.n
                             elif lighting.lower() == "interpolate":
-                                bari = construct_baricentric_coordinates(p, [p0.n, p1.n, p2.n]) 
-                                p.n = (bari[0]*p0.n*(1/p0.z) + bari[1]*p1.n*(1/p1.z) + bari[2]*p2.n*(1/p2.z))*p.z
+                                # bari = construct_baricentric_coordinates(p, [p0.n, p1.n, p2.n]) 
+                                p.n = p.alpha*p0.n/p0.z + p.beta*p1.n/p1.z + p.gamma*p2.n/p2.z
+                                p.n = p.n * 1.0/np.linalg.norm(p.n)
                             else:
                                 print("WARNING: lighting was specified, however {} is not a valid type, use 'Face' or 'Interpolate'".format(lighting))
 
                             light_color_effect = [0., 0., 0.] # Black RGB
                             for light in GL.lights:
                                 # Extract light parameters
-                                ambient_intensity = light.ambientIntensity + 0.1
+                                ambient_intensity = light.ambientIntensity
                                 intensity = light.intensity
                                 light_color = light.color
                                 direction = light.direction
@@ -184,13 +186,14 @@ class GL:
                                 # Calculate Look direction vector combined with normal
                                 Lv = (look_direction+direction)
                                 Lv = Lv * 1./np.linalg.norm(Lv)
+                                Lv = np.sign(Lv) * np.abs(Lv) ** (shininess*128.0)
 
                                 ambient_factor = diffuse_color*ambient_intensity
-                                diffuse_factor = diffuse_color*max(0, np.dot(p.n, direction))*intensity
-                                specular_factor = specular_color*max(0, np.dot(p.n, (Lv)**(shininess*128.0)))*intensity
-
-                                light_color_effect += light_color * (ambient_factor + diffuse_factor + specular_factor)
-                            # print(light_color)
+                                diffuse_factor = diffuse_color*max(0, np.dot(p.n, direction)+0.1)*intensity
+                                specular_factor = specular_color*max(0, np.dot(p.n, Lv)+0.1)*intensity
+                                total_factor = (ambient_factor + diffuse_factor + specular_factor)
+                                light_color_effect += light_color * total_factor
+                            # print(light_color_effect)
                             r, g, b = np.uint8(255.0 * (light_color_effect + emissive_color))
 
                         else: # Draw color per vertex means we must interpolate with baricentric coordinates
@@ -310,8 +313,8 @@ class GL:
 
         for tri in tris:
             p0, p1, p2 = tri
-            normal = np.cross((p1-p0).to_array(), (p2-p0).to_array())
-            normal = normal * 1./np.linalg.norm(normal)
+            normal = np.cross((p1-p0).normalize().to_array(), (p2-p0).normalize().to_array())
+            # normal = normal * 1./np.linalg.norm(normal)
             p0.n = normal
             p1.n = normal
             p2.n = normal
@@ -476,14 +479,23 @@ class GL:
             [ 0, 1, 5], [ 0, 5, 4], # +z Face
         ])
 
+        # Pre computed normals
         normals = np.array([    
-            [  0, -1,  0], [  0, -1,  0], # Bottom Face
-            [  0,  1,  0], [  0,  1,  0], # Top Face
-            [  1,  0,  0], [  1,  0,  0], # +x Face
-            [ -1,  0,  0], [ -1,  0,  0], # -x Face
-            [  0,  0,  1], [  0,  0,  1], # +z Face
-            [  0,  0, -1], [  0,  0, -1], # -z Face
-        ])
+            [  0, -1,  0,  1], [  0, -1,  0,  1], # Bottom Face
+            [  0,  1,  0,  1], [  0,  1,  0,  1], # Top Face
+            [  1,  0,  0,  1], [  1,  0,  0,  1], # +x Face
+            [ -1,  0,  0,  1], [ -1,  0,  0,  1], # -x Face
+            [  0,  0,  1,  1], [  0,  0,  1,  1], # +z Face
+            [  0,  0, -1,  1], [  0,  0, -1,  1], # -z Face
+        ])*-1
+        # Transform normals to match final cube
+        normals = np.matmul(GL.projection, np.matmul(GL.transform_stack.peek(), normals.T)).T
+        x = normals[:,0] * np.reciprocal(normals[:,-1])
+        y = normals[:,1] * np.reciprocal(normals[:,-1])
+        # z =  * np.reciprocal(normals[:,-1])
+        normals = np.vstack((x, y, normals[:,2])).T
+        norms = np.linalg.norm(normals, keepdims=True, axis=1)
+        normals = normals / norms[:,]
 
         # Identify all triangles
         vertices = np.matmul(scale, vertices.T).T
@@ -497,7 +509,7 @@ class GL:
                 p.n = normal
 
         # Draw
-        GL.draw_triangles(tris, colors)
+        GL.draw_triangles(tris, colors, lighting='face')
 
     @staticmethod
     def indexedFaceSet(coord, coordIndex, colorPerVertex, color, colorIndex,
@@ -567,15 +579,33 @@ class GL:
         # print("Sphere : colors = {0}".format(colors)) # imprime no terminal as cores
 
         vertices, indexes = icosphere(3)
+        vertices = np.array(vertices)
+
         vertices = np.array(prepare_points_3d(vertices.flatten()*radius, GL.transform_stack.peek(), GL.projection))
+
+        center = np.matmul(GL.projection, np.matmul(GL.transform_stack.peek(), np.array([[0., 0., 0., 1]]).T)).T
+        x = center[:,0] * np.reciprocal(center[:,-1])
+        y = center[:,1] * np.reciprocal(center[:,-1])
+        center = np.vstack((x, y, center[:,2])).T
+        norms = np.linalg.norm(center, keepdims=True, axis=1)
+        center = center / norms[:,]
+        center = CustomPoint3D(*center[0])
 
         tris = []
         for tri in indexes:
             # Get vertex coordinates
             p0, p1, p2 = vertices[tri]
+            p0.n = (p0 - center).normalize().to_array()
+            p1.n = (p1 - center).normalize().to_array()
+            p2.n = (p2 - center).normalize().to_array()
+            # print("Tri:")
+            # print(np.dot(p0.n, GL.lights[0].direction))
+            # print(np.dot(p1.n, GL.lights[0].direction))
+            # print(np.dot(p2.n, GL.lights[0].direction))
+            # print("="*25)
             tris.append([p0, p1, p2])
         
-        GL.draw_triangles(tris, colors)
+        GL.draw_triangles(tris, colors, lighting="interpolate")
 
     @staticmethod
     def navigationInfo(headlight):
@@ -589,12 +619,17 @@ class GL:
         # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
         # print("NavigationInfo : headlight = {0}".format(headlight)) # imprime no terminal
         if headlight:
-            GL.lights.append(DirectionalLight(
-                ambientIntensity=0.,
-                color=[1., 1., 1.],
-                intensity=1.,
-                direction=[0., 0., -1]
-            ))
+            print("Headlight enabled!")
+            GL.lights.append(
+                DirectionalLight(
+                    ambientIntensity=0.,
+                    color=[1., 1., 1.],
+                    intensity=1.,
+                    direction=[0., 0., -1]
+                )
+            )
+        else:
+            print("Headlight disabled!")
 
     @staticmethod
     def directionalLight(ambientIntensity, color, intensity, direction):
@@ -606,10 +641,10 @@ class GL:
         # longo de raios paralelos de uma distância infinita.
 
         # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
-        print("DirectionalLight : ambientIntensity = {0}".format(ambientIntensity))
-        print("DirectionalLight : color = {0}".format(color)) # imprime no terminal
-        print("DirectionalLight : intensity = {0}".format(intensity)) # imprime no terminal
-        print("DirectionalLight : direction = {0}".format(direction)) # imprime no terminal
+        # print("DirectionalLight : ambientIntensity = {0}".format(ambientIntensity))
+        # print("DirectionalLight : color = {0}".format(color)) # imprime no terminal
+        # print("DirectionalLight : intensity = {0}".format(intensity)) # imprime no terminal
+        # print("DirectionalLight : direction = {0}".format(direction)) # imprime no terminal
         light = DirectionalLight(
             ambientIntensity,
             color,

@@ -86,8 +86,8 @@ class CustomPoint3D():
         raise TypeError("CustomPoint3D only supports operations with other CustomPoint3D obejcts.")
     
     def __mul__(self, other):
-        if type(other) not in [int, float]:
-            raise TypeError("Multiplcating points is only available for scalars (int/float). Provided {}".format(type(other)))
+        if type(other) not in [int, float, np.float64]:
+            raise TypeError("Multiplying points is only available for scalars (int/float). Provided {}".format(type(other)))
         return CustomPoint3D(
             self.x*other,
             self.y*other,
@@ -96,8 +96,8 @@ class CustomPoint3D():
         )
     
     def __rmul__(self, other):
-        if type(other) not in [int, float]:
-            raise TypeError("Multiplcating points is only available for scalars (int/float). Provided {}".format(type(other)))
+        if type(other) not in [int, float, np.float64]:
+            raise TypeError("Multiplying points is only available for scalars (int/float). Provided {}".format(type(other)))
         return CustomPoint3D(
             self.x*other,
             self.y*other,
