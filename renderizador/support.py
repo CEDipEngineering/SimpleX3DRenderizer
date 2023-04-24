@@ -359,9 +359,9 @@ def quaternion_rotation_matrix(axis: CustomPoint3D, angle: float):
 
 def make_transform(translation: CustomPoint3D  = None, scale: CustomPoint3D  = None, rotation: Tuple[CustomPoint3D, float] = None):
     
-    translation = CustomPoint3D(0,0,0) if not translation else CustomPoint3D(*translation)
-    scale = CustomPoint3D(1,1,1) if not scale else CustomPoint3D(*scale) 
-    rotation = (CustomPoint3D(1,0,0), 0) if not rotation else (rotation[0], rotation[1])
+    translation = CustomPoint3D(0,0,0)      if translation is not None else CustomPoint3D(*translation)
+    scale       = CustomPoint3D(1,1,1)      if scale is not None else CustomPoint3D(*scale) 
+    rotation    = (CustomPoint3D(1,0,0), 0) if rotation is not None else (rotation[0], rotation[1])
 
 
     # Translation matrix using homogeneous coordinates 

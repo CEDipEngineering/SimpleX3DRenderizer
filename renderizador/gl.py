@@ -562,8 +562,14 @@ class GL:
                 # Update point texture
                 if current_texture: p0.t, p1.t, p2.t = texCoord[a[2]], texCoord[b[2]], texCoord[c[2]]
                     
+                # Update normals
+                normal = np.cross((p1-p0).normalize().to_array(), (p2-p0).normalize().to_array())
+                p0.n = normal
+                p1.n = normal
+                p2.n = normal
+
                 tris.append([p0, p1, p2])
-        GL.draw_triangles(tris, colors, colorPerVertex, current_texture)
+        GL.draw_triangles(tris, colors, colorPerVertex, current_texture, lighting="face")
 
     @staticmethod
     def sphere(radius, colors):
@@ -718,15 +724,46 @@ class GL:
         # como fechada, com uma transições da última chave para a primeira chave. Se os keyValues
         # na primeira e na última chave não forem idênticos, o campo closed será ignorado.
 
-        # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
-        print("SplinePositionInterpolator : set_fraction = {0}".format(set_fraction))
-        print("SplinePositionInterpolator : key = {0}".format(key)) # imprime no terminal
-        print("SplinePositionInterpolator : keyValue = {0}".format(keyValue))
-        print("SplinePositionInterpolator : closed = {0}".format(closed))
+        # setfraction se refere ao tempo da animacao, de 0 a 1
 
-        # Abaixo está só um exemplo de como os dados podem ser calculados e transferidos
-        value_changed = [0.0, 0.0, 0.0]
-        
+        # key se refere aos valores usados para inferir entre quais pontos estamos.
+        # e.g. [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+
+        # keyValue eh a lista de pontos no espaco para interpolar:
+        # e.g. [
+        #       -4.0, -3.0, 0.0, 
+        #       -2.0,  3.0, 0.0, 
+        #        0.0, -3.0, 0.0, 
+        #        2.0,  3.0, 0.0, 
+        #        4.0, -3.0, 0.0, 
+        #       -4.0, -3.0, 0.0
+        #       ]
+        # Cada ponto corresponde a um indice de key
+
+        points = np.reshape(np.array(keyValue), (-1, 3))
+        # Infer 4 points
+        p1 = np.searchsorted(key, set_fraction)
+        p2 = (p1+1)%len(key)
+        p0 = (p1-1)%len(key)
+        p3 = (p2+1)%len(key)
+
+        P = points[[p0, p1, p2, p3]]
+
+        Catmull_Rom = np.array(
+            [
+                [-0.5,  3./2., -3./2.,  0.5],
+                [   1, -5./2.,     2., -0.5],
+                [-0.5,     0.,   -0.5,    0],
+                [   0,      1,      0,    0],
+            ]
+        )
+
+        t2 = set_fraction*set_fraction
+        t3 = t2*set_fraction
+
+        T = np.array([1, set_fraction, t2, t3])
+
+        value_changed = np.matmul(np.matmul(T, Catmull_Rom), P)
         return value_changed
 
     @staticmethod
@@ -748,9 +785,31 @@ class GL:
         print("OrientationInterpolator : key = {0}".format(key)) # imprime no terminal
         print("OrientationInterpolator : keyValue = {0}".format(keyValue))
 
-        # Abaixo está só um exemplo de como os dados podem ser calculados e transferidos
-        value_changed = [0, 0, 1, 0]
 
+        points = np.reshape(np.array(keyValue), (-1, 4))
+        # Infer 4 points
+        p1 = np.searchsorted(key, set_fraction)
+        p2 = (p1+1)%len(key)
+        p0 = (p1-1)%len(key)
+        p3 = (p2+1)%len(key)
+
+        P = points[[p0, p1, p2, p3]]
+
+        Catmull_Rom = np.array(
+            [
+                [-0.5,  3./2., -3./2.,  0.5],
+                [   1, -5./2.,     2., -0.5],
+                [-0.5,     0.,   -0.5,    0],
+                [   0,      1,      0,    0],
+            ]
+        )
+
+        t2 = set_fraction*set_fraction
+        t3 = t2*set_fraction
+
+        T = np.array([1, set_fraction, t2, t3])
+
+        value_changed = np.matmul(np.matmul(T, Catmull_Rom), P)
         return value_changed
 
     # Para o futuro (Não para versão atual do projeto.)
