@@ -60,7 +60,7 @@ class GPU:
 
         # Cor e profundidade padrão para apagar o FrameBuffer
         GPU.clear_color_val = [0, 0, 0]
-        GPU.clear_depth_val = 1.0
+        GPU.clear_depth_val = np.inf
 
         # Caminho para arquivos adicionais, como texturas
         GPU.path = path

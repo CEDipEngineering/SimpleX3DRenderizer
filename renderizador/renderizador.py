@@ -103,7 +103,7 @@ class Renderizador:
 
         # Define a profundidade que ira apagar o FrameBuffer quando clear_buffer() invocado
         # Assuma 1.0 o mais afastado e -1.0 o mais próximo da camera
-        gpu.GPU.clear_depth(1.0)
+        gpu.GPU.clear_depth(np.inf)
 
         # Definindo tamanho do Viewport para renderização
         self.scene.viewport(width=self.width, height=self.height)
@@ -113,7 +113,18 @@ class Renderizador:
         # Função invocada antes do processo de renderização iniciar.
 
         # Limpa o frame buffers atual
+        if self.SSAA:
+            gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, self.framebuffers["HIGHRES"])
+            gpu.GPU.clear_buffer()
+
+
+        gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, self.framebuffers["DEPTH"])
         gpu.GPU.clear_buffer()
+
+        gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, self.framebuffers["FRONT"])
+        gpu.GPU.clear_buffer()
+
+
 
         # Recursos que podem ser úteis:
         # Define o valor do pixel no framebuffer: draw_pixel(coord, mode, data)
@@ -140,6 +151,7 @@ class Renderizador:
                     
             gpu.GPU.bind_framebuffer(gpu.GPU.FRAMEBUFFER, self.framebuffers["FRONT"])
 
+        gl.GL.clear_lights()
         # Método para a troca dos buffers (NÃO IMPLEMENTADO)
         gpu.GPU.swap_buffers()
 

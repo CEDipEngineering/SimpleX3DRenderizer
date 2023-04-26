@@ -625,7 +625,7 @@ class GL:
         # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
         # print("NavigationInfo : headlight = {0}".format(headlight)) # imprime no terminal
         if headlight:
-            print("Headlight enabled!")
+            # print("Headlight enabled!")
             GL.lights.append(
                 DirectionalLight(
                     ambientIntensity=0.,
@@ -634,8 +634,12 @@ class GL:
                     direction=[0., 0., -1]
                 )
             )
-        else:
-            print("Headlight disabled!")
+        # else:
+        #     print("Headlight disabled!")
+
+    @staticmethod
+    def clear_lights():
+        GL.lights = []
 
     @staticmethod
     def directionalLight(ambientIntensity, color, intensity, direction):
@@ -704,8 +708,8 @@ class GL:
         # Deve retornar a fração de tempo passada em fraction_changed
 
         # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
-        print("TimeSensor : cycleInterval = {0}".format(cycleInterval)) # imprime no terminal
-        print("TimeSensor : loop = {0}".format(loop))
+        # print("TimeSensor : cycleInterval = {0}".format(cycleInterval)) # imprime no terminal
+        # print("TimeSensor : loop = {0}".format(loop))
 
         # Esse método já está implementado para os alunos como exemplo
         epoch = time.time()  # time in seconds since the epoch as a floating point number.
@@ -724,47 +728,39 @@ class GL:
         # como fechada, com uma transições da última chave para a primeira chave. Se os keyValues
         # na primeira e na última chave não forem idênticos, o campo closed será ignorado.
 
-        # setfraction se refere ao tempo da animacao, de 0 a 1
-
-        # key se refere aos valores usados para inferir entre quais pontos estamos.
-        # e.g. [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
-
-        # keyValue eh a lista de pontos no espaco para interpolar:
-        # e.g. [
-        #       -4.0, -3.0, 0.0, 
-        #       -2.0,  3.0, 0.0, 
-        #        0.0, -3.0, 0.0, 
-        #        2.0,  3.0, 0.0, 
-        #        4.0, -3.0, 0.0, 
-        #       -4.0, -3.0, 0.0
-        #       ]
         # Cada ponto corresponde a um indice de key
-
+        t = set_fraction / (key[1] - key[0]) % 1
+        # Reshape points
         points = np.reshape(np.array(keyValue), (-1, 3))
-        # Infer 4 points
-        p1 = np.searchsorted(key, set_fraction)
-        p2 = (p1+1)%len(key)
-        p0 = (p1-1)%len(key)
-        p3 = (p2+1)%len(key)
+        # Infer 4 indexes
+        p1 = 0
+        for i, e in enumerate(key):
+            if set_fraction < e:
+                p1 = i-1
+                break
+        p2 = (p1 + 1)%len(key)
+        p0 = (p1 - 1)%len(key)
+        p3 = (p1 + 2)%len(key)
 
+        # Collect coordinates
         P = points[[p0, p1, p2, p3]]
 
         Catmull_Rom = np.array(
             [
                 [-0.5,  3./2., -3./2.,  0.5],
                 [   1, -5./2.,     2., -0.5],
-                [-0.5,     0.,   -0.5,    0],
+                [-0.5,     0.,    0.5,    0],
                 [   0,      1,      0,    0],
             ]
         )
 
-        t2 = set_fraction*set_fraction
-        t3 = t2*set_fraction
+        t2 = t*t
+        t3 = t2*t
 
-        T = np.array([1, set_fraction, t2, t3])
+        T = np.array([t3, t2, t, 1.0])
 
-        value_changed = np.matmul(np.matmul(T, Catmull_Rom), P)
-        return value_changed
+        # Transform
+        return np.matmul(T, np.matmul(Catmull_Rom, P))
 
     @staticmethod
     def orientationInterpolator(set_fraction, key, keyValue):
@@ -779,38 +775,39 @@ class GL:
         # dos valores em keyValue, a fração a ser interpolada vem de set_fraction que varia de
         # zeroa a um. O campo keyValue deve conter exatamente tantas rotações 3D quanto os
         # quadros-chave no key.
-
-        # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
-        print("OrientationInterpolator : set_fraction = {0}".format(set_fraction))
-        print("OrientationInterpolator : key = {0}".format(key)) # imprime no terminal
-        print("OrientationInterpolator : keyValue = {0}".format(keyValue))
-
-
+        # Cada ponto corresponde a um indice de key
+        t = set_fraction / (key[1] - key[0]) % 1
+        # Reshape points
         points = np.reshape(np.array(keyValue), (-1, 4))
-        # Infer 4 points
-        p1 = np.searchsorted(key, set_fraction)
-        p2 = (p1+1)%len(key)
-        p0 = (p1-1)%len(key)
-        p3 = (p2+1)%len(key)
+        # Infer 4 indexes
+        p1 = 0
+        for i, e in enumerate(key):
+            if set_fraction < e:
+                p1 = i-1
+                break
+        p2 = (p1 + 1)%len(key)
+        p0 = (p1 - 1)%len(key)
+        p3 = (p1 + 2)%len(key)
 
+        # Collect coordinates
         P = points[[p0, p1, p2, p3]]
 
         Catmull_Rom = np.array(
             [
                 [-0.5,  3./2., -3./2.,  0.5],
                 [   1, -5./2.,     2., -0.5],
-                [-0.5,     0.,   -0.5,    0],
+                [-0.5,     0.,    0.5,    0],
                 [   0,      1,      0,    0],
             ]
         )
 
-        t2 = set_fraction*set_fraction
-        t3 = t2*set_fraction
+        t2 = t*t
+        t3 = t2*t
 
-        T = np.array([1, set_fraction, t2, t3])
+        T = np.array([t3, t2, t, 1.0])
 
-        value_changed = np.matmul(np.matmul(T, Catmull_Rom), P)
-        return value_changed
+        # Transform
+        return np.matmul(T, np.matmul(Catmull_Rom, P))
 
     # Para o futuro (Não para versão atual do projeto.)
     def vertex_shader(self, shader):
